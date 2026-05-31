@@ -45,8 +45,33 @@ make bench-vllm   # same load against vLLM -> results/vllm.json
 make report       # merge + plot -> results/report.md
 ```
 
-## Results
-Populated after running on the 4×H100 box — see `results/`. **(in progress)**
+## Results — measured on 4× H100 (Qwen3-8B, TP=2, vLLM)
+
+Full writeup: [`results/report.md`](results/report.md). Pareto curve: `results/pareto.png`.
+Open model (Qwen3-8B) used so the run is reproducible without gated weights; the same
+harness drives Llama once HF access is set.
+
+**Continuous batching scales throughput ~88× (c=1→128) while inter-token latency barely
+moves** (4.3→5.8 ms) — the core property that makes paged-KV / in-flight batching work:
+
+| concurrency | BF16 tok/s | TTFT p99 | ITL p50 |
+|---|---|---|---|
+| 1 | 215 | 17 ms | 4.3 ms |
+| 32 | 6,299 | 80 ms | 4.8 ms |
+| 128 | 18,915 | 329 ms | 5.8 ms |
+
+**FP8 vs BF16 (same model, same GPUs):** FP8 is 1.25–1.30× faster at low concurrency
+(decode is memory-bandwidth-bound; FP8 halves weight traffic, ITL −22%), narrowing to
+1.07× under heavy batching. **Throughput at a TTFT-p99 ≤ 200 ms SLA:** BF16 11.5k vs
+FP8 13.5k tok/s.
+
+> Shared-box hygiene: served on GPUs 2,3 via `--gpus '"device=2,3"'`, never touching the
+> busy GPU 0. Reproduce: `bash scripts/serve_vllm.sh` then `bash bench/sweep.sh <base> <tag>`
+> and `python bench/pareto.py`.
 
 ## Status
-Scaffold + runnable harness complete; engine build and benchmarks pending a run on the 4×H100 box.
+Runnable harness + **measured vLLM bf16/fp8 SLA study** complete. The TensorRT-LLM engine
+build + Triton serving path (`scripts/build_engine.sh`, `scripts/serve_triton.sh`) is
+scripted for a head-to-head against this vLLM baseline; pending the TRT-LLM container pull
+on the box. The benchmark harness is stack-agnostic, so adding the TRT-LLM column is a
+serve-and-sweep, not new code.

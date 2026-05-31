@@ -5,6 +5,5 @@ __pycache__/
 engines/
 checkpoints/
 hf_models/
-results/*.json
-results/*.png
 .venv/
+# results/ (json + png + report.md) intentionally tracked as benchmark evidence.
