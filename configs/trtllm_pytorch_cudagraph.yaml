@@ -1,11 +1,18 @@
-# TensorRT-LLM PyTorch-backend tuning attempt (see README §2 "Tuning attempt").
-# Pass with: trtllm-serve serve <model> --backend pytorch \
-#              --extra_llm_api_options configs/trtllm_pytorch_cudagraph.yaml
+# TensorRT-LLM CUDA-graph config for trtllm-serve (TensorRT-LLM 0.20 / 25.06 container).
 #
-# Result on Llama-3.1-8B TP=2: 89 tok/s / 10.9 ms ITL — SLOWER than the cpp compiled
-# engine (111 / 8.9 ms). The PyTorch path's Python + JIT-FlashInfer overhead outweighs the
-# CUDA-graph capture, so the compiled cpp engine remains TRT-LLM's best config here.
-# Kept as honest evidence that the ITL gap is not closed by this flag.
-use_cuda_graph: true
-cuda_graph_padding_enabled: true
-cuda_graph_max_batch_size: 256
+# Pass with: trtllm-serve serve <model> --backend pytorch \
+#              --extra_llm_api_options configs/trtllm_pytorch_cudagraph.yaml \
+#              --max_batch_size 256 --max_num_tokens 8192
+#
+# CRITICAL: the keys MUST be nested under `pytorch_backend_config`. extra_llm_api_options maps
+# to the LLM API args, and the pytorch executor config lives under that key. Passing
+# `use_cuda_graph: true` at the top level (or 1.0's `cuda_graph_config:`) is silently IGNORED in
+# 0.20 — the startup log still shows `use_cuda_graph=False`. Verify with:
+#   docker logs <ctr> | grep -oE 'use_cuda_graph=[A-Za-z]+'   # must print True
+#
+# With graphs correctly on, Llama-3.1-8B FP8 TP=2 went 162 -> 374 tok/s at c1 (~89% of the
+# 1-GPU memory-bandwidth roofline). Without it, 162 = ~19% of roofline = physically implausible.
+pytorch_backend_config:
+  use_cuda_graph: true
+  cuda_graph_padding_enabled: true
+  cuda_graph_max_batch_size: 256

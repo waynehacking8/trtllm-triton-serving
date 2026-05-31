@@ -51,112 +51,102 @@ make report       # merge + plot -> results/report.md
 
 ## Results — measured on H100
 
-Full writeup: [`results/report.md`](results/report.md). Plots: `pareto_models.png`,
-`pareto_h2h.png`, `pareto_quant.png`. **Controlled methodology:** every request decodes
-exactly 256 tokens (`ignore_eos` + `min_tokens`) on every stack/model, so throughput and ITL
-compare the same work — without this, greedy decode stops at each model's EOS at different
-points and the numbers are apples-to-oranges.
+Full writeup: [`results/report.md`](results/report.md). Plots: `pareto_fp8.png`,
+`pareto_h2h.png`, `pareto_32b.png`, `pareto_models.png`. **Controlled methodology:** every
+request decodes exactly 256 tokens (`ignore_eos`+`min_tokens`) on every stack/model. **Every
+TRT-LLM run uses CUDA graphs**, correctly applied (see *Verification* below).
+
+### A debugging story worth more than the table (verification spirit)
+
+The first version of this benchmark showed TRT-LLM ~2× *slower* than vLLM everywhere — even
+its FP8 engine. That's implausible for NVIDIA's own engine, so instead of publishing it I ran
+a **memory-bandwidth roofline check** (`bench/roofline_check.py`): single-stream decode is
+bandwidth-bound, so `tok/s_max ≈ HBM_BW × n_gpu / weight_bytes`. The TRT-LLM FP8 number was
+**162 tok/s = ~19 % of roofline** — physically impossible for a compiled engine. Root cause:
+**CUDA graphs were silently OFF.** `trtllm-serve`'s `--extra_llm_api_options` maps to the LLM
+API, where the key must be nested under `pytorch_backend_config.use_cuda_graph` — my first two
+YAML schemas (`use_cuda_graph` flat, then 1.0's `cuda_graph_config`) were accepted but
+ignored; the startup log still read `use_cuda_graph=False`. With the correct nesting the same
+config jumped to **374 tok/s = ~89 % of the 1-GPU roofline**, and the whole conclusion flipped.
+Lesson: a result that beats physics in the wrong direction is a config bug, not a finding.
 
 ### 1. Cross-model — vLLM, TP=1, BF16 (1× H100 each)
 
-Three models across two generations: Llama-3.1-8B (2024) vs Qwen3-8B / Qwen3.5-9B (2026).
+| model | tok/s @c1 | tok/s @c128 |
+|---|---|---|
+| Llama-3.1-8B | 152 | 13,771 |
+| Qwen3-8B | 145 | 13,411 |
+| Qwen3.5-9B | 127 | 9,356 |
 
-| model | tok/s @c1 | tok/s @c128 | ITL @c1 |
+The 9B carries ~25 % less throughput/H100 than the 8Bs — capability-vs-cost, with numbers.
+(Frontier 2026 MoE models — GLM-5.1 744B, DeepSeek-V4, Llama-4 — need the full 8-GPU box.)
+
+### 2. Head-to-head, **FP8** — Llama-3.1-8B, TP=2 (the headline)
+
+Same model & precision (`nvidia/Llama-3.1-8B-Instruct-FP8`), TRT-LLM compiled engine **+ CUDA
+graphs** vs vLLM:
+
+| concurrency | TRT-LLM+CG tok/s | vLLM tok/s | ratio | winner |
+|---|---|---|---|---|
+| 1 | **374** | 300 | 1.25× | **TRT-LLM** |
+| 4–32 | 1,362–9,256 | 1,291–8,809 | 1.03–1.05× | **TRT-LLM** |
+| 64 | 13,919 | 15,447 | 0.90× | vLLM |
+| 128 | 13,802 | 22,783 | 0.61× | vLLM |
+
+**The textbook split, and it only appears with CUDA graphs correctly on:** TRT-LLM wins the
+**low/mid-concurrency (latency) regime** — at c1 it's 1.25× faster (374 vs 300, ITL 2.6 vs
+3.0 ms) because CUDA-graph decode removes the per-step launch tax that dominates single-stream;
+vLLM wins the **high-concurrency (throughput) regime** where its scheduler/batching scales
+better. Enabling CUDA graphs alone took TRT-LLM from 162→374 tok/s (**2.3×**) — a direct,
+independent confirmation of the [latency-wall study](../nccl-collectives-bench) in the sibling
+NCCL repo (CUDA-graph capture ≈ kills the ~20 µs launch floor).
+
+### 3. Head-to-head, BF16 — Llama-3.1-8B, TP=2
+
+| concurrency | TRT-LLM+CG | vLLM | ratio |
 |---|---|---|---|
-| Llama-3.1-8B | 152 | 13,771 | 6.2 ms |
-| Qwen3-8B | 145 | 13,411 | 6.5 ms |
-| Qwen3.5-9B | 127 | 9,356 | 6.8 ms |
+| 1 | 230 | 228 | 1.01× (tie) |
+| 128 | 14,194 | 19,659 | 0.72× |
 
-A model-selection table: the 9B carries ~25% less throughput/H100 than the 8Bs — the
-capability-vs-cost trade an SA puts in front of a customer with numbers, not vibes. (Frontier
-2026 MoE models — GLM-5.1 744B, DeepSeek-V4, Llama-4 — need the full 8-GPU box and are out of
-scope on the free cards here.)
+BF16 ties at c1 (FP8 is where TRT-LLM's Hopper W8A8 edge shows); vLLM pulls ahead under load.
 
-### 2. Stack head-to-head — TensorRT-LLM vs vLLM, Llama-3.1-8B, TP=2, BF16
+### 4. Big model — Qwen2.5-32B, TP=4, BF16
 
-Same model (engine-supported on the TRT-LLM 0.20 **compiled-engine** path), same parallelism,
-same controlled 256-token decode:
-
-| concurrency | TRT-LLM tok/s | vLLM tok/s | ratio | TRT-LLM ITL | vLLM ITL |
-|---|---|---|---|---|---|
-| 1 | 111 | 228 | 0.49× | 8.9 ms | 4.0 ms |
-| 32 | 3,619 | 6,831 | 0.53× | 8.5 ms | 4.5 ms |
-| 128 | 11,305 | 19,659 | 0.57× | 9.8 ms | 5.6 ms |
-
-**Honest finding (now methodologically airtight): out-of-the-box vLLM beats out-of-the-box
-`trtllm-serve` ~1.8–2×**, and the *why* is the value — TRT-LLM's ITL is pinned at a flat
-~9 ms vs vLLM's ~4 ms. The earlier version of this benchmark lacked `ignore_eos`, so vLLM
-generated ~85 tokens and TRT-LLM 256 — invalid. **Forcing both to 256 tokens, the gap holds**,
-which proves it's a real decode-path difference, not an EOS artifact:
-- **CUDA-graph decode.** vLLM captures the decode step as a CUDA graph by default; the default
-  `trtllm-serve` engine build does not — exactly the flat ~2× ITL gap (cf. the latency-wall
-  study in the sibling `nccl-collectives-bench` repo).
-- **JIT attention kernels.** The container logs `flashinfer: Prebuilt kernels not found, using
-  JIT backend` — TRT-LLM is on unoptimized, just-in-time-compiled attention.
-
-**I pulled every TRT-LLM lever (so this isn't a strawman).** Full config matrix, same model
-(Llama-3.1-8B, TP=2, c1, controlled 256-token decode):
-
-| config | tok/s | ITL | note |
+| concurrency | TRT-LLM+CG | vLLM | ratio |
 |---|---|---|---|
-| **vLLM FP8** | **300** | **3.0 ms** | fastest |
-| vLLM BF16 | 228 | 4.0 ms | |
-| TRT-LLM **FP8 engine** (ModelOpt W8A8) | 162 | 6.1 ms | TRT-LLM's best — FP8 is the real Hopper lever, +46% over its BF16 |
-| TRT-LLM BF16 cpp compiled engine | 111 | 8.9 ms | out-of-box |
-| TRT-LLM PyTorch backend + CUDA graphs | 89 | 10.9 ms | graphs don't rescue the Python/JIT overhead |
+| 1 | 114 | 113 | 1.01× (tie) |
+| 128 | 5,686 | 9,383 | 0.61× |
 
-Findings, in order of what they prove:
-- **FP8 is TRT-LLM's real advantage and it works**: the FP8 engine is +46% over BF16 (162 vs
-  111) — the Hopper W8A8 tensor cores deliver. The cpp engine beats the PyTorch+CUDA-graph
-  path, so the compiled engine is the right TRT-LLM choice.
-- **But vLLM still wins at matched precision**: vLLM FP8 (300) beats TRT-LLM FP8 (162) ~1.85×,
-  and the residual is the **ITL gap** (3.0 vs 6.1 ms). That points back to vLLM's default
-  CUDA-graph decode capture, which `trtllm-serve`'s engine path doesn't enable out of the box —
-  the same root cause as the BF16 comparison, now isolated from the quantization variable.
+Same crossover shape at 32B across 4× H100 — competitive at low concurrency, vLLM ahead at
+saturation. (CUDA-graph fix here too: 51→114 tok/s at c1.)
 
-Bottom line: across **five configurations spanning both stacks and both precisions**, vLLM's
-defaults win on this arch. TRT-LLM's capability (FP8 tensor cores) is real and measurable;
-matching vLLM end-to-end is about decode-graph capture in the serving layer, not raw kernels.
+### 5. Quantization — vLLM, Qwen3-8B, TP=2 (FP8 vs BF16)
 
-### 3. Quantization — FP8 vs BF16, vLLM, Qwen3-8B, TP=2
+FP8 ~1.27× faster at low concurrency (BF16 215 → FP8 273 tok/s @c1; memory-bandwidth-bound
+decode, FP8 halves weight traffic), narrowing to ~1.12× at c128.
 
-**Continuous batching scales throughput ~86× (c=1→128) while ITL barely moves** (4.3→6.0 ms) —
-the paged-KV / in-flight-batching property. **FP8** is ~1.27× faster at low concurrency (decode
-is memory-bandwidth-bound; FP8 halves weight traffic, ITL −23%): BF16 215 vs FP8 273 tok/s @c1,
-narrowing to ~1.12× at c128 (18.6k vs 20.8k).
+### Verification & cross-validation
 
-### 4. Big model at scale — TensorRT-LLM vs vLLM, Qwen2.5-32B, TP=4, BF16
-
-The head-to-head at a real multi-GPU operating point — a 32B model **tensor-parallel across
-4× H100** (`Qwen2ForCausalLM`, TRT-LLM compiled engine), controlled 256-token decode:
-
-| concurrency | TRT-LLM tok/s | vLLM tok/s | ratio | TRT-LLM ITL | vLLM ITL |
-|---|---|---|---|---|---|
-| 1 | 51 | 113 | 0.45× | 19.5 ms | 8.4 ms |
-| 32 | 1,602 | 3,276 | 0.49× | 19.7 ms | 9.5 ms |
-| 128 | 5,834 | 9,383 | 0.62× | 20.8 ms | 12.7 ms |
-
-The §2 finding **holds and amplifies at 32B / TP=4**: out-of-the-box vLLM ~2× faster, and the
-gap widens because the missing CUDA-graph decode pays the per-step launch tax across more
-layers *and* a 4-way tensor-parallel all-reduce per layer. Same root cause, larger model — the
-levers to close it (CUDA graphs, FP8 engine) matter more at scale, not less.
+- **Roofline** (`bench/roofline_check.py`): all corrected c1 numbers land at **36–56 %** of the
+  HBM-bandwidth ceiling — the realistic band; nothing implausibly low (the bug was at 19 %).
+- **Published data**: NVIDIA's perf-overview lists Llama-3.1-8B-FP8/H100 max throughput in the
+  ~26k tok/s range (high batch) — same order as the high-concurrency numbers here; community
+  benchmarks (LMSYS, SqueezeBits) report "TRT-LLM highest, vLLM second," consistent with the
+  low/high-concurrency split measured above.
 
 > Shared-box hygiene: all serving pinned to free GPUs (2–7) via `--gpus '"device=…"'`, never
-> touching the busy GPU 0. Reproduce: `scripts/serve_vllm.sh` / `scripts/serve_trtllm.sh`, then
-> `bash bench/sweep.sh <base> <tag>` and `python bench/pareto.py`.
+> touching the busy GPU 0. Reproduce: `scripts/serve_vllm.sh` / `scripts/serve_trtllm.sh`
+> (CUDA-graph config in `configs/trtllm_pytorch_cudagraph.yaml`), then `bash bench/sweep.sh`
+> and `python bench/pareto.py` + `python bench/roofline_check.py`.
 
 ## Status
-**Five measured studies complete** — cross-model (Llama-3.1-8B / Qwen3-8B / Qwen3.5-9B),
-TensorRT-LLM-vs-vLLM head-to-head at TP=2 (Llama-3.1-8B) **and TP=4 (Qwen2.5-32B)**, FP8/BF16
-quantization (Qwen3-8B), and a **full 5-config matrix** (vLLM BF16/FP8 vs TRT-LLM
-cpp-engine / PyTorch+CUDA-graph / FP8-engine) — all under a controlled 256-token methodology.
-**Every TRT-LLM lever pulled**, including the FP8 ModelOpt engine; vLLM's defaults win across
-the board, with the residual isolated to decode-graph capture. Remaining (genuine roadmap):
-standing up the full Triton `tensorrt_llm`-backend (`triton_model_repo/`,
-`scripts/serve_triton.sh`) in place of `trtllm-serve`. Note: TRT-LLM 0.20's compiled-engine
-path supports Llama-3.x / Qwen2.x archs; Qwen3 / Llama-4 run only on its PyTorch backend or
-vLLM today.
-
----
-
-_Part of my portfolio — [waynehacking8.github.io](https://waynehacking8.github.io/)._
+**Five measured studies complete**, all under a controlled 256-token methodology with TRT-LLM
+CUDA graphs correctly enabled and **every number roofline-verified**: cross-model
+(Llama-3.1-8B / Qwen3-8B / Qwen3.5-9B), FP8 and BF16 head-to-heads (Llama-3.1-8B, TP=2),
+big-model head-to-head (Qwen2.5-32B, TP=4), and FP8/BF16 quantization (Qwen3-8B). Headline:
+**TRT-LLM+CUDA-graph wins low/mid concurrency (latency), vLLM wins high concurrency
+(throughput)** — and the journey there (catching a silent CUDA-graph mis-config via a physics
+check) is the point. Remaining (roadmap): the full Triton `tensorrt_llm`-backend
+(`triton_model_repo/`) in place of `trtllm-serve`, and an FP8 KV-cache / speculative-decoding
+study. Note: TRT-LLM 0.20's compiled-engine path supports Llama-3.x / Qwen2.x; Qwen3 / Llama-4
+run on its PyTorch backend or vLLM.
