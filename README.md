@@ -156,3 +156,7 @@ standing up the full Triton `tensorrt_llm`-backend (`triton_model_repo/`,
 `scripts/serve_triton.sh`) in place of `trtllm-serve`. Note: TRT-LLM 0.20's compiled-engine
 path supports Llama-3.x / Qwen2.x archs; Qwen3 / Llama-4 run only on its PyTorch backend or
 vLLM today.
+
+---
+
+_Part of my portfolio — [waynehacking8.github.io](https://waynehacking8.github.io/)._
