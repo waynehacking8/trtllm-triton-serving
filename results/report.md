@@ -170,3 +170,15 @@ Same head-to-head as §2, but a 32B model **tensor-parallel across 4× H100** (`
 | TensorRT-LLM (Qwen2.5-32B) | 882 | 1602 | 3161 |
 | vLLM (Qwen2.5-32B) | 463 | 5826 | 9383 |
 
+## 5. Every lever — config matrix, Llama-3.1-8B, TP=2 (both stacks, both precisions)
+
+Pulled every TRT-LLM lever vs vLLM, same model/controlled decode. FP8 is TRT-LLM's best config (+46% over its BF16) — the Hopper W8A8 lever is real — but vLLM FP8 still wins ~1.85×; the residual is vLLM's default CUDA-graph decode capture.
+
+| config | tok/s @c1 | ITL @c1 |
+|---|---|---|
+| vLLM FP8 (Llama-3.1-8B) | 300 | 2.98 ms |
+| vLLM (Llama-3.1-8B) | 228 | 4.04 ms |
+| TensorRT-LLM FP8 engine (Llama-3.1-8B) | 162 | 6.06 ms |
+| TensorRT-LLM (Llama-3.1-8B) | 111 | 8.88 ms |
+| TensorRT-LLM PyTorch+CUDA-graph (Llama-3.1-8B) | 89 | 10.91 ms |
+

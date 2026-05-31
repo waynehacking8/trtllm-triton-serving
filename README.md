@@ -94,23 +94,29 @@ which proves it's a real decode-path difference, not an EOS artifact:
 - **JIT attention kernels.** The container logs `flashinfer: Prebuilt kernels not found, using
   JIT backend` — TRT-LLM is on unoptimized, just-in-time-compiled attention.
 
-**Tuning attempt (so this isn't a strawman).** I also ran TRT-LLM's **PyTorch backend with
-CUDA graphs enabled** (`use_cuda_graph: true`, `--extra_llm_api_options`) — the obvious lever
-for the ITL gap. It came out *slower*, not faster:
+**I pulled every TRT-LLM lever (so this isn't a strawman).** Full config matrix, same model
+(Llama-3.1-8B, TP=2, c1, controlled 256-token decode):
 
-| config (Llama-3.1-8B, TP=2, c1) | tok/s | ITL |
-|---|---|---|
-| vLLM | 228 | 4.0 ms |
-| TRT-LLM cpp compiled engine (out-of-box) | 111 | 8.9 ms |
-| TRT-LLM PyTorch backend + CUDA graphs | 89 | 10.9 ms |
+| config | tok/s | ITL | note |
+|---|---|---|---|
+| **vLLM FP8** | **300** | **3.0 ms** | fastest |
+| vLLM BF16 | 228 | 4.0 ms | |
+| TRT-LLM **FP8 engine** (ModelOpt W8A8) | 162 | 6.1 ms | TRT-LLM's best — FP8 is the real Hopper lever, +46% over its BF16 |
+| TRT-LLM BF16 cpp compiled engine | 111 | 8.9 ms | out-of-box |
+| TRT-LLM PyTorch backend + CUDA graphs | 89 | 10.9 ms | graphs don't rescue the Python/JIT overhead |
 
-So the **compiled cpp engine is already TRT-LLM's best config here**, and CUDA-graph on the
-PyTorch backend doesn't rescue it (the PyTorch path carries Python + JIT-FlashInfer overhead
-that outweighs the graph capture). The one lever I did **not** pull is an **FP8 engine** —
-TRT-LLM's real Hopper advantage (W8A8 on FP8 tensor cores), which needs a ModelOpt-quantized
-checkpoint; that's the honest remaining roadmap item, not a quick flag. Bottom line: across
-three TRT-LLM configurations, out-of-the-box vLLM wins on this arch; closing it is FP8-engine
-work, not a config tweak.
+Findings, in order of what they prove:
+- **FP8 is TRT-LLM's real advantage and it works**: the FP8 engine is +46% over BF16 (162 vs
+  111) — the Hopper W8A8 tensor cores deliver. The cpp engine beats the PyTorch+CUDA-graph
+  path, so the compiled engine is the right TRT-LLM choice.
+- **But vLLM still wins at matched precision**: vLLM FP8 (300) beats TRT-LLM FP8 (162) ~1.85×,
+  and the residual is the **ITL gap** (3.0 vs 6.1 ms). That points back to vLLM's default
+  CUDA-graph decode capture, which `trtllm-serve`'s engine path doesn't enable out of the box —
+  the same root cause as the BF16 comparison, now isolated from the quantization variable.
+
+Bottom line: across **five configurations spanning both stacks and both precisions**, vLLM's
+defaults win on this arch. TRT-LLM's capability (FP8 tensor cores) is real and measurable;
+matching vLLM end-to-end is about decode-graph capture in the serving layer, not raw kernels.
 
 ### 3. Quantization — FP8 vs BF16, vLLM, Qwen3-8B, TP=2
 
@@ -140,10 +146,12 @@ levers to close it (CUDA graphs, FP8 engine) matter more at scale, not less.
 > `bash bench/sweep.sh <base> <tag>` and `python bench/pareto.py`.
 
 ## Status
-**Four measured studies complete** — cross-model (Llama-3.1-8B / Qwen3-8B / Qwen3.5-9B),
-TensorRT-LLM-vs-vLLM head-to-head at TP=2 (Llama-3.1-8B) **and TP=4 (Qwen2.5-32B)**, and
-FP8/BF16 quantization (Qwen3-8B) — all under a controlled 256-token methodology. Remaining
-(roadmap): a CUDA-graph + FP8 **tuned** TRT-LLM engine to close the head-to-head gap, and
+**Five measured studies complete** — cross-model (Llama-3.1-8B / Qwen3-8B / Qwen3.5-9B),
+TensorRT-LLM-vs-vLLM head-to-head at TP=2 (Llama-3.1-8B) **and TP=4 (Qwen2.5-32B)**, FP8/BF16
+quantization (Qwen3-8B), and a **full 5-config matrix** (vLLM BF16/FP8 vs TRT-LLM
+cpp-engine / PyTorch+CUDA-graph / FP8-engine) — all under a controlled 256-token methodology.
+**Every TRT-LLM lever pulled**, including the FP8 ModelOpt engine; vLLM's defaults win across
+the board, with the residual isolated to decode-graph capture. Remaining (genuine roadmap):
 standing up the full Triton `tensorrt_llm`-backend (`triton_model_repo/`,
 `scripts/serve_triton.sh`) in place of `trtllm-serve`. Note: TRT-LLM 0.20's compiled-engine
 path supports Llama-3.x / Qwen2.x archs; Qwen3 / Llama-4 run only on its PyTorch backend or

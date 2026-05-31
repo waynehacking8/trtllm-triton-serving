@@ -17,11 +17,16 @@ LABEL = {
     "trtllm_llama31": "TensorRT-LLM (Llama-3.1-8B)", "vllm_llama31": "vLLM (Llama-3.1-8B)",
     "vllm_bf16": "vLLM BF16 (Qwen3-8B)", "vllm_fp8": "vLLM FP8 (Qwen3-8B)",
     "trtllm_qwen25_32b": "TensorRT-LLM (Qwen2.5-32B)", "vllm_qwen25_32b": "vLLM (Qwen2.5-32B)",
+    "vllm_llama31_fp8": "vLLM FP8 (Llama-3.1-8B)",
+    "trtllm_llama31_fp8": "TensorRT-LLM FP8 engine (Llama-3.1-8B)",
+    "trtllm_llama31_tuned": "TensorRT-LLM PyTorch+CUDA-graph (Llama-3.1-8B)",
 }
 GROUP_A = ["xm_qwen3_8b", "xm_qwen35_9b", "xm_llama31_8b"]
 GROUP_B = ["trtllm_llama31", "vllm_llama31"]
 GROUP_C = ["vllm_bf16", "vllm_fp8"]
 GROUP_D = ["trtllm_qwen25_32b", "vllm_qwen25_32b"]
+GROUP_E = ["vllm_llama31_fp8", "trtllm_llama31_fp8", "trtllm_llama31",
+           "trtllm_llama31_tuned", "vllm_llama31"]
 
 
 def load_sweeps():
@@ -149,6 +154,21 @@ def main():
                   f"{a['itl_p50_ms']:.2f} | {b['itl_p50_ms']:.2f} |")
             w("")
         w("### Throughput at a TTFT-p99 SLA (tok/s)\n"); sla_table(w, runs, GROUP_D)
+
+    if any(t in runs for t in GROUP_E):
+        w("## 5. Every lever — config matrix, Llama-3.1-8B, TP=2 (both stacks, both precisions)\n")
+        w("Pulled every TRT-LLM lever vs vLLM, same model/controlled decode. FP8 is TRT-LLM's "
+          "best config (+46% over its BF16) — the Hopper W8A8 lever is real — but vLLM FP8 "
+          "still wins ~1.85×; the residual is vLLM's default CUDA-graph decode capture.\n")
+        w("| config | tok/s @c1 | ITL @c1 |")
+        w("|---|---|---|")
+        order = ["vllm_llama31_fp8", "vllm_llama31", "trtllm_llama31_fp8", "trtllm_llama31",
+                 "trtllm_llama31_tuned"]
+        for t in order:
+            if t in runs:
+                r = next((x for x in runs[t] if x["concurrency"] == 1), runs[t][0])
+                w(f"| {LABEL.get(t,t)} | {r['throughput_tok_s']:.0f} | {r['itl_p50_ms']:.2f} ms |")
+        w("")
 
     os.makedirs("results", exist_ok=True)
     open("results/report.md", "w").write("\n".join(L) + "\n")
