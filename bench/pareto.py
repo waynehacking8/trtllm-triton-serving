@@ -66,9 +66,9 @@ def main():
         print("no sweep results"); return
     L = []; w = L.append
     w("# Serving benchmark — TensorRT-LLM vs vLLM, and FP8 vs BF16 (4×H100)\n")
-    w("vLLM and TensorRT-LLM OpenAI servers, TP=2, same GPUs class, fixed prompt, "
-      "max_tokens=256, temp=0. Load from `bench/bench.py` (async, streaming, per-request "
-      "TTFT + inter-token latency).\n")
+    w("OpenAI-compatible servers (`trtllm-serve` / vLLM), TP=2, same GPU class, fixed prompt, "
+      "max_tokens=256 with `ignore_eos` (every request decodes the same fixed length), temp=0. "
+      "Load from `bench/bench.py` (async, streaming, per-request TTFT + inter-token latency).\n")
 
     h2h = ["trtllm_qwen25", "vllm_qwen25"]
     if any(t in runs for t in h2h):

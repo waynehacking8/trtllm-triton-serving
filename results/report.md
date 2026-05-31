@@ -2,6 +2,8 @@
 
 vLLM and TensorRT-LLM OpenAI servers, TP=2, same GPUs class, fixed prompt, max_tokens=256, temp=0. Load from `bench/bench.py` (async, streaming, per-request TTFT + inter-token latency).
 
+> **Note:** these numbers predate the `ignore_eos` fix in `bench.py`, so the two stacks decoded different output lengths (vLLM stopped at EOS, TRT-LLM ran to 256). The **per-token ITL** comparison is length-independent and stands; the **aggregate throughput ratio** will tighten on a re-run with fixed-length decode. The README Results section is the up-to-date narrative.
+
 ## 1. TensorRT-LLM vs vLLM — Qwen2.5-7B-Instruct, TP=2, BF16
 
 Same model, same parallelism — TensorRT-LLM uses the compiled engine path (`Qwen2ForCausalLM`, supported in TRT-LLM 0.20); vLLM is the baseline.

@@ -1,25 +1,26 @@
-# TensorRT-LLM + Triton Multi-GPU Serving
+# TensorRT-LLM vs vLLM — Multi-GPU Serving Benchmark
 
-Production-style LLM serving on the NVIDIA-native stack — **TensorRT-LLM** engines
-served through **Triton Inference Server**, tensor-parallel across **4× H100 (NVLink)**,
-benchmarked head-to-head against **vLLM**.
+A reproducible **build → serve → benchmark** harness for LLM serving on the NVIDIA stack:
+**TensorRT-LLM** engines against a **vLLM** baseline on **4× H100 (NVLink)**, measured under
+matched concurrency for throughput, TTFT, and inter-token latency.
 
-Built to move from "I use vLLM" to "I can stand up the NVIDIA inference stack on real
-multi-GPU hardware and reason about the trade-offs." The repo prioritizes a reproducible
-**build → serve → benchmark** loop over breadth.
+Each stack is driven through its **OpenAI-compatible server** (`trtllm-serve` and vLLM). A
+Triton `tensorrt_llm`-backend config is included for the Triton serving path, but the
+committed numbers are from `trtllm-serve` — the full Triton deployment is on the roadmap.
 
 ## What this is
-- A scripted pipeline: HF checkpoint → TensorRT-LLM engine (TP=4, FP8/FP16) → Triton model repository → load test.
-- An apples-to-apples benchmark harness (TensorRT-LLM/Triton vs vLLM): throughput, TTFT, inter-token latency under matched concurrency.
-- Documented engineering decisions: tensor parallelism, quantization, in-flight (continuous) batching, paged KV-cache.
+- A scripted pipeline: HF checkpoint → TensorRT-LLM engine → serve → concurrency-swept load test.
+- An apples-to-apples benchmark (TensorRT-LLM vs vLLM): throughput, TTFT, inter-token latency,
+  with output length pinned via `ignore_eos` so both stacks do the same fixed decode work.
+- Honest, explained results — including where the out-of-the-box TRT-LLM engine *loses*, and why.
 
 ## What this is NOT
-- Not a fork of `trtllm-serve` / `genai-perf` — it wraps them in a reproducible harness with a documented comparison.
-- Not a claim that TensorRT-LLM always wins — the goal is to measure honestly and explain *when and why* each stack wins.
+- Not a fork of `trtllm-serve` / `genai-perf` — it drives them in a reproducible harness with a documented comparison.
+- Not a claim that TensorRT-LLM always wins — it measures honestly and names the levers to close the gap (see Results).
 - Not multi-node — single 4×H100 box over NVLink. Multi-node (NCCL over InfiniBand) is in the roadmap.
 
 ## Hardware
-- 4× NVIDIA H100 80GB, NVLink. Tensor parallel = 4.
+- 4× NVIDIA H100 80GB, NVLink. Committed results measured at TP=2 (Qwen2.5-7B / Qwen3-8B fit comfortably); the harness supports TP=4.
 - Driver + CUDA per the TensorRT-LLM container (see `docs/design-decisions.md`).
 
 ## Layout
