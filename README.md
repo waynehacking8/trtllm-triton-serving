@@ -45,33 +45,52 @@ make bench-vllm   # same load against vLLM -> results/vllm.json
 make report       # merge + plot -> results/report.md
 ```
 
-## Results — measured on 4× H100 (Qwen3-8B, TP=2, vLLM)
+## Results — measured on 4× H100
 
-Full writeup: [`results/report.md`](results/report.md). Pareto curve: `results/pareto.png`.
-Open model (Qwen3-8B) used so the run is reproducible without gated weights; the same
-harness drives Llama once HF access is set.
+Full writeup: [`results/report.md`](results/report.md). Plots: `results/pareto_h2h.png`,
+`results/pareto_quant.png`. Open models used so runs reproduce without gated weights.
 
-**Continuous batching scales throughput ~88× (c=1→128) while inter-token latency barely
-moves** (4.3→5.8 ms) — the core property that makes paged-KV / in-flight batching work:
+### 1. TensorRT-LLM vs vLLM — Qwen2.5-7B-Instruct, TP=2, BF16 (same model, same hardware)
 
-| concurrency | BF16 tok/s | TTFT p99 | ITL p50 |
-|---|---|---|---|
-| 1 | 215 | 17 ms | 4.3 ms |
-| 32 | 6,299 | 80 ms | 4.8 ms |
-| 128 | 18,915 | 329 ms | 5.8 ms |
+TensorRT-LLM 0.20 served via `trtllm-serve` (compiled engine, `Qwen2ForCausalLM`) vs vLLM,
+both out-of-the-box defaults:
 
-**FP8 vs BF16 (same model, same GPUs):** FP8 is 1.25–1.30× faster at low concurrency
-(decode is memory-bandwidth-bound; FP8 halves weight traffic, ITL −22%), narrowing to
-1.07× under heavy batching. **Throughput at a TTFT-p99 ≤ 200 ms SLA:** BF16 11.5k vs
-FP8 13.5k tok/s.
+| concurrency | TRT-LLM tok/s | vLLM tok/s | ratio | TRT-LLM ITL | vLLM ITL |
+|---|---|---|---|---|---|
+| 1 | 119 | 197 | 0.60× | 8.3 ms | 3.9 ms |
+| 32 | 3,750 | 6,331 | 0.59× | 8.2 ms | 4.3 ms |
+| 128 | 11,917 | 14,680 | 0.81× | 8.9 ms | 5.6 ms |
 
-> Shared-box hygiene: served on GPUs 2,3 via `--gpus '"device=2,3"'`, never touching the
-> busy GPU 0. Reproduce: `bash scripts/serve_vllm.sh` then `bash bench/sweep.sh <base> <tag>`
-> and `python bench/pareto.py`.
+**Honest finding: out-of-the-box vLLM beats out-of-the-box `trtllm-serve` on this 7B model**
+(1.2–1.8× throughput), and the *why* is the interesting part — TRT-LLM's inter-token latency
+is pinned at a flat ~8.3 ms vs vLLM's ~4 ms. Two concrete causes, not hand-waving:
+- **CUDA-graph decode.** vLLM captures the decode step as a CUDA graph by default; the
+  default `trtllm-serve` engine build does not, so every decode step pays kernel-launch
+  dispatch — which is exactly the flat ~2× ITL gap (see the latency-wall study in the
+  sibling `nccl-collectives-bench` repo).
+- **JIT attention kernels.** The container logs `flashinfer: Prebuilt kernels not found,
+  using JIT backend` — TRT-LLM is running unoptimized, just-in-time-compiled attention.
+
+The point of an SA benchmark is not to crown a winner but to explain the gap and name the
+levers to close it: build the engine with CUDA graphs + paged-context FMHA, prebuild
+FlashInfer kernels, and add an **FP8 engine** (TRT-LLM's real advantage on Hopper). Those
+are the documented next steps in [`docs/roadmap.md`](docs/roadmap.md). TRT-LLM is built to
+*win* this comparison once tuned; out of the box on a non-flagship arch, it does not.
+
+### 2. FP8 vs BF16 — vLLM, Qwen3-8B, TP=2
+
+Same model, same GPUs. **Continuous batching scales throughput ~88× (c=1→128) while ITL
+barely moves** (4.3→5.8 ms) — the paged-KV / in-flight-batching property. **FP8** is
+1.25–1.30× faster at low concurrency (decode is memory-bandwidth-bound; FP8 halves weight
+traffic, ITL −22%), narrowing to 1.07× under heavy batching. At a TTFT-p99 ≤ 200 ms SLA:
+BF16 11.5k vs FP8 13.5k tok/s.
+
+> Shared-box hygiene: TRT-LLM on GPUs 2,3 and vLLM on GPUs 4,5 via `--gpus '"device=…"'`,
+> never touching the busy GPU 0. Reproduce: serve each stack, `bash bench/sweep.sh <base>
+> <tag>`, then `python bench/pareto.py`.
 
 ## Status
-Runnable harness + **measured vLLM bf16/fp8 SLA study** complete. The TensorRT-LLM engine
-build + Triton serving path (`scripts/build_engine.sh`, `scripts/serve_triton.sh`) is
-scripted for a head-to-head against this vLLM baseline; pending the TRT-LLM container pull
-on the box. The benchmark harness is stack-agnostic, so adding the TRT-LLM column is a
-serve-and-sweep, not new code.
+**Measured head-to-head complete** — TensorRT-LLM (`trtllm-serve`, compiled engine) vs vLLM
+on Qwen2.5-7B, plus an FP8/BF16 study on Qwen3-8B. Remaining (roadmap): a CUDA-graph + FP8
+**tuned** TRT-LLM engine to close the gap, and the full Triton `tensorrt_llm`-backend
+deployment (`scripts/serve_triton.sh`) in place of `trtllm-serve`.
