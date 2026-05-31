@@ -1,0 +1,18 @@
+# Triton tensorrt_llm backend config (template).
+# Fill engine_dir after `make build`; gpu_device_ids must match TP size (0,1,2,3).
+name: "tensorrt_llm"
+backend: "tensorrtllm"
+max_batch_size: 256
+model_transaction_policy { decoupled: true }
+input  [ { name: "input_ids" data_type: TYPE_INT32 dims: [ -1 ] } ]
+output [ { name: "output_ids" data_type: TYPE_INT32 dims: [ -1, -1 ] } ]
+instance_group [ { count: 1 kind: KIND_GPU gpus: [ 0, 1, 2, 3 ] } ]
+parameters {
+  key: "gpt_model_type" value: { string_value: "inflight_fused_batching" }
+}
+parameters {
+  key: "gpt_model_path" value: { string_value: "/work/engines/MODEL-tp4-float16" }
+}
+parameters {
+  key: "kv_cache_free_gpu_mem_fraction" value: { string_value: "0.9" }
+}

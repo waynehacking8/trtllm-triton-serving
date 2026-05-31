@@ -1,0 +1,10 @@
+__pycache__/
+*.engine
+*.safetensors
+*.bin
+engines/
+checkpoints/
+hf_models/
+results/*.json
+results/*.png
+.venv/

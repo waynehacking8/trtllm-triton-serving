@@ -1,0 +1,5 @@
+# Benchmark client only — the engine build/serve runs inside the TensorRT-LLM/Triton container.
+httpx>=0.27
+numpy>=1.26
+matplotlib>=3.8
+transformers>=4.44
