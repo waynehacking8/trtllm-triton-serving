@@ -15,10 +15,10 @@ async def one_request(client, base, max_tokens, model):
     t0 = time.perf_counter()
     first = None
     n = 0
-    # ignore_eos + min_tokens force every request to decode exactly max_tokens, so both
-    # stacks do the *same* fixed decode workload — otherwise one stops early at EOS and the
-    # throughput/ITL comparison conflates "decode speed" with "who stops sooner".
-    # (Both are vLLM/trtllm-serve extensions on the OpenAI completions endpoint.)
+    # ignore_eos + min_tokens force EVERY request to decode exactly max_tokens, on every
+    # stack. Without this, greedy (temp=0) decoding stops at the model's EOS at different
+    # points per stack/model, so throughput/ITL would compare different amounts of work —
+    # an apples-to-oranges benchmark. Both are vLLM/TRT-LLM OpenAI extensions.
     payload = {"model": model, "prompt": PROMPT, "max_tokens": max_tokens,
                "min_tokens": max_tokens, "ignore_eos": True,
                "stream": True, "temperature": 0.0}

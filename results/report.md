@@ -1,92 +1,130 @@
-# Serving benchmark — TensorRT-LLM vs vLLM, and FP8 vs BF16 (4×H100)
+# Serving benchmark — cross-model, stack head-to-head, and quantization (4×H100)
 
-vLLM and TensorRT-LLM OpenAI servers, TP=2, same GPUs class, fixed prompt, max_tokens=256, temp=0. Load from `bench/bench.py` (async, streaming, per-request TTFT + inter-token latency).
+vLLM / TensorRT-LLM OpenAI servers, fixed prompt, max_tokens=256, temp=0, **ignore_eos + min_tokens** so every request decodes exactly 256 tokens on every stack/model (a fair, controlled comparison). Load: `bench/bench.py` (async, streaming, TTFT + inter-token latency). ITL is per-streamed-chunk (≈ per token).
 
-> **Note:** these numbers predate the `ignore_eos` fix in `bench.py`, so the two stacks decoded different output lengths (vLLM stopped at EOS, TRT-LLM ran to 256). The **per-token ITL** comparison is length-independent and stands; the **aggregate throughput ratio** will tighten on a re-run with fixed-length decode. The README Results section is the up-to-date narrative.
+## 1. Cross-model — vLLM, TP=1, BF16
 
-## 1. TensorRT-LLM vs vLLM — Qwen2.5-7B-Instruct, TP=2, BF16
+Same server, same hardware (1× H100 each), three models across two generations/families: Llama-3.1-8B (2024) vs Qwen3-8B and Qwen3.5-9B (2026).
 
-Same model, same parallelism — TensorRT-LLM uses the compiled engine path (`Qwen2ForCausalLM`, supported in TRT-LLM 0.20); vLLM is the baseline.
-
-**TensorRT-LLM** (`trtllm_qwen25`)
+**Qwen3-8B** (`xm_qwen3_8b`)
 
 | concurrency | throughput_tok_s | ttft_p50_s | ttft_p99_s | itl_p50_ms | itl_p99_ms |
 |---|---|---|---|---|---|
-| 1 | 119.0 | 0.0173 | 0.0464 | 8.29 | 8.34 |
-| 4 | 511.8 | 0.0235 | 0.0307 | 7.73 | 7.8 |
-| 16 | 1883.1 | 0.0539 | 0.0855 | 8.3 | 8.37 |
-| 32 | 3749.5 | 0.0793 | 0.1222 | 8.21 | 8.41 |
-| 64 | 6891.1 | 0.1461 | 0.1882 | 8.71 | 8.9 |
-| 128 | 11917.1 | 0.3082 | 1.6864 | 8.94 | 9.53 |
+| 1 | 145.4 | 0.0221 | 0.0231 | 6.51 | 6.51 |
+| 16 | 2262.2 | 0.0566 | 0.1682 | 6.79 | 6.81 |
+| 64 | 7862.5 | 0.1271 | 0.163 | 7.59 | 7.79 |
+| 128 | 13410.7 | 0.2033 | 0.3166 | 8.59 | 8.73 |
 
-**vLLM** (`vllm_qwen25`)
+**Qwen3.5-9B** (`xm_qwen35_9b`)
 
 | concurrency | throughput_tok_s | ttft_p50_s | ttft_p99_s | itl_p50_ms | itl_p99_ms |
 |---|---|---|---|---|---|
-| 1 | 197.4 | 0.0162 | 0.0166 | 3.89 | 3.89 |
-| 4 | 903.5 | 0.0252 | 0.0301 | 3.95 | 4.96 |
-| 16 | 3345.5 | 0.0443 | 0.0908 | 4.11 | 4.18 |
-| 32 | 6330.6 | 0.0533 | 0.0959 | 4.28 | 4.69 |
-| 64 | 10555.7 | 0.0984 | 0.1741 | 4.6 | 4.81 |
-| 128 | 14679.5 | 0.2267 | 0.3483 | 5.6 | 6.67 |
+| 1 | 127.1 | 0.0284 | 0.0338 | 6.81 | 6.81 |
+| 16 | 1978.4 | 0.0694 | 0.4282 | 7.63 | 8.26 |
+| 64 | 6233.8 | 0.1404 | 0.2206 | 9.63 | 9.75 |
+| 128 | 9355.9 | 0.2675 | 0.5493 | 12.41 | 12.82 |
 
-Throughput ratio (TensorRT-LLM ÷ vLLM) by concurrency:
+**Llama-3.1-8B** (`xm_llama31_8b`)
+
+| concurrency | throughput_tok_s | ttft_p50_s | ttft_p99_s | itl_p50_ms | itl_p99_ms |
+|---|---|---|---|---|---|
+| 1 | 152.4 | 0.0224 | 0.0239 | 6.19 | 6.2 |
+| 16 | 2378.1 | 0.0559 | 0.1591 | 6.44 | 6.83 |
+| 64 | 8315.1 | 0.1045 | 0.1617 | 7.24 | 7.35 |
+| 128 | 13770.7 | 0.2096 | 0.2627 | 8.39 | 8.51 |
+
+Throughput (tok/s) by concurrency:
+
+| model | c1 | c16 | c64 | c128 |
+|---|---|---|---|---|
+| Qwen3-8B | 145 | 2262 | 7862 | 13411 |
+| Qwen3.5-9B | 127 | 1978 | 6234 | 9356 |
+| Llama-3.1-8B | 152 | 2378 | 8315 | 13771 |
+
+Reads as a model-selection table: at a target concurrency, which model gives the most tok/s per H100. Larger/newer models trade throughput for capability — the SA job is to put that trade in front of the customer with numbers.
+
+### Throughput at a TTFT-p99 SLA (tok/s)
+
+| stack/model | p99≤100ms | p99≤200ms | p99≤500ms |
+|---|---|---|---|
+| Qwen3-8B | 145 | 7862 | 13411 |
+| Qwen3.5-9B | 127 | 127 | 6234 |
+| Llama-3.1-8B | 152 | 8315 | 13771 |
+
+## 2. Stack head-to-head — TensorRT-LLM vs vLLM, Llama-3.1-8B, TP=2, BF16
+
+Same model (Llama-3.1-8B, supported on the TRT-LLM 0.20 **compiled-engine** path), same parallelism, same controlled 256-token decode.
+
+**TensorRT-LLM (Llama-3.1-8B)** (`trtllm_llama31`)
+
+| concurrency | throughput_tok_s | ttft_p50_s | ttft_p99_s | itl_p50_ms | itl_p99_ms |
+|---|---|---|---|---|---|
+| 1 | 111.1 | 0.0186 | 0.0501 | 8.88 | 8.9 |
+| 4 | 507.2 | 0.0243 | 0.0318 | 7.81 | 7.84 |
+| 16 | 1937.8 | 0.046 | 0.0623 | 8.07 | 8.16 |
+| 32 | 3619.3 | 0.0815 | 0.1292 | 8.53 | 8.63 |
+| 64 | 6513.8 | 0.134 | 0.205 | 9.28 | 9.38 |
+| 128 | 11305.3 | 0.2879 | 0.7875 | 9.75 | 10.18 |
+
+**vLLM (Llama-3.1-8B)** (`vllm_llama31`)
+
+| concurrency | throughput_tok_s | ttft_p50_s | ttft_p99_s | itl_p50_ms | itl_p99_ms |
+|---|---|---|---|---|---|
+| 1 | 227.7 | 0.0159 | 0.0176 | 4.04 | 4.04 |
+| 4 | 937.0 | 0.023 | 0.1103 | 4.14 | 4.5 |
+| 16 | 3529.9 | 0.046 | 0.0791 | 4.34 | 4.37 |
+| 32 | 6831.4 | 0.0526 | 0.084 | 4.45 | 4.48 |
+| 64 | 12031.2 | 0.1075 | 0.1567 | 4.85 | 4.93 |
+| 128 | 19658.7 | 0.2104 | 0.3598 | 5.55 | 5.92 |
 
 | concurrency | TRT-LLM tok/s | vLLM tok/s | ratio | TRT-LLM ITL ms | vLLM ITL ms |
 |---|---|---|---|---|---|
-| 1 | 119 | 197 | 0.60× | 8.29 | 3.89 |
-| 4 | 512 | 904 | 0.57× | 7.73 | 3.95 |
-| 16 | 1883 | 3346 | 0.56× | 8.30 | 4.11 |
-| 32 | 3750 | 6331 | 0.59× | 8.21 | 4.28 |
-| 64 | 6891 | 10556 | 0.65× | 8.71 | 4.60 |
-| 128 | 11917 | 14680 | 0.81× | 8.94 | 5.60 |
+| 1 | 111 | 228 | 0.49× | 8.88 | 4.04 |
+| 4 | 507 | 937 | 0.54× | 7.81 | 4.14 |
+| 16 | 1938 | 3530 | 0.55× | 8.07 | 4.34 |
+| 32 | 3619 | 6831 | 0.53× | 8.53 | 4.45 |
+| 64 | 6514 | 12031 | 0.54× | 9.28 | 4.85 |
+| 128 | 11305 | 19659 | 0.58× | 9.75 | 5.55 |
 
 ### Throughput at a TTFT-p99 SLA (tok/s)
 
-| stack | p99≤100ms | p99≤200ms | p99≤500ms |
+| stack/model | p99≤100ms | p99≤200ms | p99≤500ms |
 |---|---|---|---|
-| TensorRT-LLM | 1883 | 6891 | 6891 |
-| vLLM | 6331 | 10556 | 14680 |
+| TensorRT-LLM (Llama-3.1-8B) | 1938 | 3619 | 6514 |
+| vLLM (Llama-3.1-8B) | 6831 | 12031 | 19659 |
 
-## 2. FP8 vs BF16 — vLLM, Qwen3-8B, TP=2
+## 3. Quantization — vLLM, Qwen3-8B, TP=2 (FP8 vs BF16)
 
-**vLLM BF16** (`vllm_bf16`)
-
-| concurrency | throughput_tok_s | ttft_p50_s | ttft_p99_s | itl_p50_ms | itl_p99_ms |
-|---|---|---|---|---|---|
-| 1 | 215.3 | 0.0171 | 0.0173 | 4.29 | 4.29 |
-| 4 | 897.5 | 0.0248 | 0.0294 | 4.36 | 4.4 |
-| 16 | 3291.2 | 0.048 | 0.0945 | 4.6 | 4.97 |
-| 32 | 6299.3 | 0.0566 | 0.0798 | 4.84 | 4.89 |
-| 64 | 11474.0 | 0.1109 | 0.1752 | 5.07 | 5.4 |
-| 128 | 18915.0 | 0.2096 | 0.3292 | 5.82 | 6.18 |
-
-**vLLM FP8** (`vllm_fp8`)
+**vLLM BF16 (Qwen3-8B)** (`vllm_bf16`)
 
 | concurrency | throughput_tok_s | ttft_p50_s | ttft_p99_s | itl_p50_ms | itl_p99_ms |
 |---|---|---|---|---|---|
-| 1 | 272.3 | 0.0153 | 0.0159 | 3.33 | 3.34 |
-| 4 | 1136.8 | 0.0235 | 0.0295 | 3.38 | 3.75 |
-| 16 | 4263.0 | 0.0447 | 0.0825 | 3.54 | 3.57 |
-| 32 | 7895.3 | 0.0683 | 0.087 | 3.76 | 3.87 |
-| 64 | 13469.3 | 0.1396 | 0.179 | 4.17 | 4.42 |
-| 128 | 20232.4 | 0.2262 | 0.3155 | 5.3 | 5.76 |
+| 1 | 215.3 | 0.0165 | 0.0175 | 4.29 | 4.3 |
+| 4 | 884.7 | 0.0266 | 0.0322 | 4.38 | 4.74 |
+| 16 | 3353.4 | 0.0412 | 0.0886 | 4.59 | 4.63 |
+| 32 | 6189.0 | 0.0738 | 0.096 | 4.88 | 4.97 |
+| 64 | 11525.9 | 0.1029 | 0.1581 | 5.08 | 5.15 |
+| 128 | 18584.7 | 0.2072 | 0.3159 | 5.97 | 6.17 |
+
+**vLLM FP8 (Qwen3-8B)** (`vllm_fp8`)
+
+| concurrency | throughput_tok_s | ttft_p50_s | ttft_p99_s | itl_p50_ms | itl_p99_ms |
+|---|---|---|---|---|---|
+| 1 | 273.0 | 0.0159 | 0.0172 | 3.31 | 3.32 |
+| 4 | 1135.0 | 0.0242 | 0.0303 | 3.38 | 3.76 |
+| 16 | 4321.2 | 0.0389 | 0.0765 | 3.53 | 3.56 |
+| 32 | 7840.9 | 0.0664 | 0.1298 | 3.76 | 3.89 |
+| 64 | 13792.4 | 0.1067 | 0.1762 | 4.13 | 4.25 |
+| 128 | 20793.7 | 0.2027 | 0.2815 | 5.26 | 5.51 |
 
 | concurrency | BF16 tok/s | FP8 tok/s | FP8 speedup | BF16 ITL ms | FP8 ITL ms |
 |---|---|---|---|---|---|
-| 1 | 215 | 272 | 1.26× | 4.29 | 3.33 |
-| 4 | 898 | 1137 | 1.27× | 4.36 | 3.38 |
-| 16 | 3291 | 4263 | 1.30× | 4.60 | 3.54 |
-| 32 | 6299 | 7895 | 1.25× | 4.84 | 3.76 |
-| 64 | 11474 | 13469 | 1.17× | 5.07 | 4.17 |
-| 128 | 18915 | 20232 | 1.07× | 5.82 | 5.30 |
+| 1 | 215 | 273 | 1.27× | 4.29 | 3.31 |
+| 4 | 885 | 1135 | 1.28× | 4.38 | 3.38 |
+| 16 | 3353 | 4321 | 1.29× | 4.59 | 3.53 |
+| 32 | 6189 | 7841 | 1.27× | 4.88 | 3.76 |
+| 64 | 11526 | 13792 | 1.20× | 5.08 | 4.13 |
+| 128 | 18585 | 20794 | 1.12× | 5.97 | 5.26 |
 
 FP8 (Hopper FP8 tensor cores) wins most at low concurrency where decode is memory-bandwidth-bound; the edge narrows under heavy batching.
-
-### Throughput at a TTFT-p99 SLA (tok/s)
-
-| stack | p99≤100ms | p99≤200ms | p99≤500ms |
-|---|---|---|---|
-| vLLM BF16 | 6299 | 11474 | 18915 |
-| vLLM FP8 | 7895 | 13469 | 20232 |
 

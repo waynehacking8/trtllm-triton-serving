@@ -1,5 +1,12 @@
-# Triton tensorrt_llm backend config (template).
-# Fill engine_dir after `make build`; gpu_device_ids must match TP size (0,1,2,3).
+# Triton tensorrt_llm backend config (TEMPLATE — production deployment path).
+#
+# NOTE: the measured benchmarks in results/ were collected via `trtllm-serve` (TensorRT-LLM's
+# own OpenAI-compatible server, scripts/serve_trtllm.sh) at TP=2, NOT through this Triton
+# backend. This file is the production-grade Triton deployment template (TP=4, in-flight
+# fused batching), wired but not exercised by the current benchmark run — standing it up
+# end-to-end is on the roadmap. Both serve the same TRT-LLM engine; trtllm-serve was used for
+# the vLLM comparison because both expose an identical OpenAI API.
+# Fill engine_dir after `make build`; gpu_device_ids must match TP size (0,1,2,3 for TP=4).
 name: "tensorrt_llm"
 backend: "tensorrtllm"
 max_batch_size: 256
