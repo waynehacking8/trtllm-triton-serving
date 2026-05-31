@@ -128,3 +128,45 @@ Same model (Llama-3.1-8B, supported on the TRT-LLM 0.20 **compiled-engine** path
 
 FP8 (Hopper FP8 tensor cores) wins most at low concurrency where decode is memory-bandwidth-bound; the edge narrows under heavy batching.
 
+## 4. Big model at scale — TensorRT-LLM vs vLLM, Qwen2.5-32B, TP=4, BF16
+
+Same head-to-head as §2, but a 32B model **tensor-parallel across 4× H100** (`Qwen2ForCausalLM`, TRT-LLM compiled engine), controlled 256-token decode — the multi-GPU operating point that actually exercises the box.
+
+**TensorRT-LLM (Qwen2.5-32B)** (`trtllm_qwen25_32b`)
+
+| concurrency | throughput_tok_s | ttft_p50_s | ttft_p99_s | itl_p50_ms | itl_p99_ms |
+|---|---|---|---|---|---|
+| 1 | 50.6 | 0.0308 | 0.0314 | 19.51 | 19.63 |
+| 4 | 228.3 | 0.0367 | 0.0512 | 17.42 | 17.51 |
+| 16 | 882.3 | 0.0655 | 0.0893 | 17.91 | 18.09 |
+| 32 | 1602.2 | 0.092 | 0.1321 | 19.65 | 19.73 |
+| 64 | 3161.0 | 0.1551 | 0.2334 | 19.65 | 19.83 |
+| 128 | 5834.1 | 0.2286 | 0.6812 | 20.78 | 21.97 |
+
+**vLLM (Qwen2.5-32B)** (`vllm_qwen25_32b`)
+
+| concurrency | throughput_tok_s | ttft_p50_s | ttft_p99_s | itl_p50_ms | itl_p99_ms |
+|---|---|---|---|---|---|
+| 1 | 113.4 | 0.0216 | 0.0218 | 8.43 | 8.44 |
+| 4 | 463.4 | 0.0329 | 0.0449 | 8.48 | 8.82 |
+| 16 | 1738.4 | 0.0608 | 0.1205 | 8.95 | 8.98 |
+| 32 | 3275.6 | 0.0809 | 0.1093 | 9.45 | 9.51 |
+| 64 | 5826.0 | 0.1166 | 0.1747 | 10.48 | 10.55 |
+| 128 | 9382.9 | 0.2128 | 0.2762 | 12.72 | 12.87 |
+
+| concurrency | TRT-LLM tok/s | vLLM tok/s | ratio | TRT-LLM ITL ms | vLLM ITL ms |
+|---|---|---|---|---|---|
+| 1 | 51 | 113 | 0.45× | 19.51 | 8.43 |
+| 4 | 228 | 463 | 0.49× | 17.42 | 8.48 |
+| 16 | 882 | 1738 | 0.51× | 17.91 | 8.95 |
+| 32 | 1602 | 3276 | 0.49× | 19.65 | 9.45 |
+| 64 | 3161 | 5826 | 0.54× | 19.65 | 10.48 |
+| 128 | 5834 | 9383 | 0.62× | 20.78 | 12.72 |
+
+### Throughput at a TTFT-p99 SLA (tok/s)
+
+| stack/model | p99≤100ms | p99≤200ms | p99≤500ms |
+|---|---|---|---|
+| TensorRT-LLM (Qwen2.5-32B) | 882 | 1602 | 3161 |
+| vLLM (Qwen2.5-32B) | 463 | 5826 | 9383 |
+

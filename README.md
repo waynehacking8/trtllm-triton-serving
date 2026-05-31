@@ -106,15 +106,32 @@ the paged-KV / in-flight-batching property. **FP8** is ~1.27× faster at low con
 is memory-bandwidth-bound; FP8 halves weight traffic, ITL −23%): BF16 215 vs FP8 273 tok/s @c1,
 narrowing to ~1.12× at c128 (18.6k vs 20.8k).
 
-> Shared-box hygiene: all serving pinned to free GPUs (2–6) via `--gpus '"device=…"'`, never
+### 4. Big model at scale — TensorRT-LLM vs vLLM, Qwen2.5-32B, TP=4, BF16
+
+The head-to-head at a real multi-GPU operating point — a 32B model **tensor-parallel across
+4× H100** (`Qwen2ForCausalLM`, TRT-LLM compiled engine), controlled 256-token decode:
+
+| concurrency | TRT-LLM tok/s | vLLM tok/s | ratio | TRT-LLM ITL | vLLM ITL |
+|---|---|---|---|---|---|
+| 1 | 51 | 113 | 0.45× | 19.5 ms | 8.4 ms |
+| 32 | 1,602 | 3,276 | 0.49× | 19.7 ms | 9.5 ms |
+| 128 | 5,834 | 9,383 | 0.62× | 20.8 ms | 12.7 ms |
+
+The §2 finding **holds and amplifies at 32B / TP=4**: out-of-the-box vLLM ~2× faster, and the
+gap widens because the missing CUDA-graph decode pays the per-step launch tax across more
+layers *and* a 4-way tensor-parallel all-reduce per layer. Same root cause, larger model — the
+levers to close it (CUDA graphs, FP8 engine) matter more at scale, not less.
+
+> Shared-box hygiene: all serving pinned to free GPUs (2–7) via `--gpus '"device=…"'`, never
 > touching the busy GPU 0. Reproduce: `scripts/serve_vllm.sh` / `scripts/serve_trtllm.sh`, then
 > `bash bench/sweep.sh <base> <tag>` and `python bench/pareto.py`.
 
 ## Status
-**Three measured studies complete** — cross-model (Llama-3.1-8B / Qwen3-8B / Qwen3.5-9B),
-TensorRT-LLM-vs-vLLM head-to-head (Llama-3.1-8B), and FP8/BF16 quantization (Qwen3-8B), all
-under a controlled 256-token methodology. Remaining (roadmap): a CUDA-graph + FP8 **tuned**
-TRT-LLM engine to close the head-to-head gap, and standing up the full Triton
-`tensorrt_llm`-backend (`triton_model_repo/`, `scripts/serve_triton.sh`) in place of
-`trtllm-serve`. Note: TRT-LLM 0.20's compiled-engine path supports Llama-3.x / Qwen2.x archs;
-Qwen3 / Llama-4 run only on its PyTorch backend or vLLM today.
+**Four measured studies complete** — cross-model (Llama-3.1-8B / Qwen3-8B / Qwen3.5-9B),
+TensorRT-LLM-vs-vLLM head-to-head at TP=2 (Llama-3.1-8B) **and TP=4 (Qwen2.5-32B)**, and
+FP8/BF16 quantization (Qwen3-8B) — all under a controlled 256-token methodology. Remaining
+(roadmap): a CUDA-graph + FP8 **tuned** TRT-LLM engine to close the head-to-head gap, and
+standing up the full Triton `tensorrt_llm`-backend (`triton_model_repo/`,
+`scripts/serve_triton.sh`) in place of `trtllm-serve`. Note: TRT-LLM 0.20's compiled-engine
+path supports Llama-3.x / Qwen2.x archs; Qwen3 / Llama-4 run only on its PyTorch backend or
+vLLM today.

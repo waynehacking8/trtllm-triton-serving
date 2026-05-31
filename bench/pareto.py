@@ -16,10 +16,12 @@ LABEL = {
     "xm_qwen3_8b": "Qwen3-8B", "xm_qwen35_9b": "Qwen3.5-9B", "xm_llama31_8b": "Llama-3.1-8B",
     "trtllm_llama31": "TensorRT-LLM (Llama-3.1-8B)", "vllm_llama31": "vLLM (Llama-3.1-8B)",
     "vllm_bf16": "vLLM BF16 (Qwen3-8B)", "vllm_fp8": "vLLM FP8 (Qwen3-8B)",
+    "trtllm_qwen25_32b": "TensorRT-LLM (Qwen2.5-32B)", "vllm_qwen25_32b": "vLLM (Qwen2.5-32B)",
 }
 GROUP_A = ["xm_qwen3_8b", "xm_qwen35_9b", "xm_llama31_8b"]
 GROUP_B = ["trtllm_llama31", "vllm_llama31"]
 GROUP_C = ["vllm_bf16", "vllm_fp8"]
+GROUP_D = ["trtllm_qwen25_32b", "vllm_qwen25_32b"]
 
 
 def load_sweeps():
@@ -129,12 +131,32 @@ def main():
         w("FP8 (Hopper FP8 tensor cores) wins most at low concurrency where decode is "
           "memory-bandwidth-bound; the edge narrows under heavy batching.\n")
 
+    if any(t in runs for t in GROUP_D):
+        w("## 4. Big model at scale — TensorRT-LLM vs vLLM, Qwen2.5-32B, TP=4, BF16\n")
+        w("Same head-to-head as §2, but a 32B model **tensor-parallel across 4× H100** "
+          "(`Qwen2ForCausalLM`, TRT-LLM compiled engine), controlled 256-token decode — the "
+          "multi-GPU operating point that actually exercises the box.\n")
+        sweep_table(w, runs, GROUP_D)
+        if all(t in runs for t in GROUP_D):
+            tr = {r["concurrency"]: r for r in runs["trtllm_qwen25_32b"]}
+            vl = {r["concurrency"]: r for r in runs["vllm_qwen25_32b"]}
+            w("| concurrency | TRT-LLM tok/s | vLLM tok/s | ratio | TRT-LLM ITL ms | vLLM ITL ms |")
+            w("|---|---|---|---|---|---|")
+            for c in sorted(set(tr) & set(vl)):
+                a, b = tr[c], vl[c]
+                rt = a["throughput_tok_s"] / b["throughput_tok_s"] if b["throughput_tok_s"] else 0
+                w(f"| {c} | {a['throughput_tok_s']:.0f} | {b['throughput_tok_s']:.0f} | {rt:.2f}× | "
+                  f"{a['itl_p50_ms']:.2f} | {b['itl_p50_ms']:.2f} |")
+            w("")
+        w("### Throughput at a TTFT-p99 SLA (tok/s)\n"); sla_table(w, runs, GROUP_D)
+
     os.makedirs("results", exist_ok=True)
     open("results/report.md", "w").write("\n".join(L) + "\n")
     print("wrote results/report.md")
     _plot(runs, GROUP_A, "pareto_models.png", "Cross-model — vLLM TP=1 (4×H100)")
     _plot(runs, GROUP_B, "pareto_h2h.png", "TensorRT-LLM vs vLLM — Llama-3.1-8B TP=2")
     _plot(runs, GROUP_C, "pareto_quant.png", "vLLM FP8 vs BF16 — Qwen3-8B TP=2")
+    _plot(runs, GROUP_D, "pareto_32b.png", "TensorRT-LLM vs vLLM — Qwen2.5-32B TP=4")
 
 
 def _plot(runs, tags, fname, title):

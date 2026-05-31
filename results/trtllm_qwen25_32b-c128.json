@@ -1,0 +1,12 @@
+{
+  "concurrency": 128,
+  "requests": 1024,
+  "wall_s": 44.933,
+  "throughput_tok_s": 5834.1,
+  "out_tokens_mean": 256.0,
+  "ttft_p50_s": 0.2286,
+  "ttft_p99_s": 0.6812,
+  "itl_p50_ms": 20.78,
+  "itl_p99_ms": 21.97,
+  "itl_mean_ms": 20.7
+}
