@@ -1,0 +1,20 @@
+{
+  "model": "Qwen2.5-7B-Instruct",
+  "method": "ngram (prompt-lookup)",
+  "num_speculative_tokens": 5,
+  "draft_acceptance_rate": 0.68,
+  "results": [
+    {
+      "task": "extractive (RAG-style, echoes context)",
+      "baseline_tok_s": 154.2,
+      "ngram_spec_tok_s": 434.4,
+      "speedup": 2.82
+    },
+    {
+      "task": "generative (novel text)",
+      "baseline_tok_s": 154.5,
+      "ngram_spec_tok_s": 135.6,
+      "speedup": 0.88
+    }
+  ]
+}

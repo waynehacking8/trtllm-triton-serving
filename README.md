@@ -125,6 +125,29 @@ saturation. (CUDA-graph fix here too: 51→114 tok/s at c1.)
 FP8 ~1.27× faster at low concurrency (BF16 215 → FP8 273 tok/s @c1; memory-bandwidth-bound
 decode, FP8 halves weight traffic), narrowing to ~1.12× at c128.
 
+### 6. Frontier — n-gram (prompt-lookup) speculative decoding
+
+Speculative decoding proposes K tokens cheaply and verifies them in one target forward pass;
+accepted tokens are ~free. The **n-gram** variant needs *no draft model* — it drafts from
+recent prompt n-grams, so it wins exactly when the output echoes the input (RAG, summarization,
+code editing, agentic transcripts). vLLM, Qwen2.5-7B, `num_speculative_tokens=5`, **measured
+non-streaming** (see why below):
+
+| task | baseline | n-gram spec | speedup |
+|---|---|---|---|
+| **extractive (RAG-style, echoes context)** | 154 | **434 tok/s** | **2.82×** |
+| generative (novel text) | 154 | 136 | 0.88× |
+
+Draft acceptance **68 %**. The result is the whole point: speculative decoding is
+**acceptance-gated** — a **2.8× win** where the draft is usually right, a **net loss** on
+free-form generation where it isn't. An SA picks it per workload, not as a blanket switch.
+- **Cross-validation**: prompt-lookup / n-gram decoding is reported at ~2–4× on input-grounded
+  tasks in the literature — 2.8× lands in that band.
+- **Verification caveat (again)**: streamed client-side this *looks* like 0.85× because spec
+  decode emits tokens in bursts that per-SSE-chunk streaming re-serializes over the network;
+  non-streaming reveals the true 2.8× — the same measurement lesson as the head-to-heads.
+  (`bench/spec_decode.py`, `results/spec_decode.json`.)
+
 ### Verification & cross-validation
 
 - **Roofline** (`bench/roofline_check.py`): all corrected c1 numbers land at **36–56 %** of the
