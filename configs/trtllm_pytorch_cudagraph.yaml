@@ -1,0 +1,11 @@
+# TensorRT-LLM PyTorch-backend tuning attempt (see README §2 "Tuning attempt").
+# Pass with: trtllm-serve serve <model> --backend pytorch \
+#              --extra_llm_api_options configs/trtllm_pytorch_cudagraph.yaml
+#
+# Result on Llama-3.1-8B TP=2: 89 tok/s / 10.9 ms ITL — SLOWER than the cpp compiled
+# engine (111 / 8.9 ms). The PyTorch path's Python + JIT-FlashInfer overhead outweighs the
+# CUDA-graph capture, so the compiled cpp engine remains TRT-LLM's best config here.
+# Kept as honest evidence that the ITL gap is not closed by this flag.
+use_cuda_graph: true
+cuda_graph_padding_enabled: true
+cuda_graph_max_batch_size: 256

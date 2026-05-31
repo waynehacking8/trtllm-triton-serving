@@ -94,10 +94,23 @@ which proves it's a real decode-path difference, not an EOS artifact:
 - **JIT attention kernels.** The container logs `flashinfer: Prebuilt kernels not found, using
   JIT backend` — TRT-LLM is on unoptimized, just-in-time-compiled attention.
 
-The SA point isn't to crown a winner but to explain the gap and name the levers: build with
-CUDA graphs + paged-context FMHA, prebuild FlashInfer kernels, add an **FP8 engine** (TRT-LLM's
-real Hopper advantage). Those are the roadmap. TRT-LLM is built to *win* this once tuned; out
-of the box on a non-flagship arch, it does not.
+**Tuning attempt (so this isn't a strawman).** I also ran TRT-LLM's **PyTorch backend with
+CUDA graphs enabled** (`use_cuda_graph: true`, `--extra_llm_api_options`) — the obvious lever
+for the ITL gap. It came out *slower*, not faster:
+
+| config (Llama-3.1-8B, TP=2, c1) | tok/s | ITL |
+|---|---|---|
+| vLLM | 228 | 4.0 ms |
+| TRT-LLM cpp compiled engine (out-of-box) | 111 | 8.9 ms |
+| TRT-LLM PyTorch backend + CUDA graphs | 89 | 10.9 ms |
+
+So the **compiled cpp engine is already TRT-LLM's best config here**, and CUDA-graph on the
+PyTorch backend doesn't rescue it (the PyTorch path carries Python + JIT-FlashInfer overhead
+that outweighs the graph capture). The one lever I did **not** pull is an **FP8 engine** —
+TRT-LLM's real Hopper advantage (W8A8 on FP8 tensor cores), which needs a ModelOpt-quantized
+checkpoint; that's the honest remaining roadmap item, not a quick flag. Bottom line: across
+three TRT-LLM configurations, out-of-the-box vLLM wins on this arch; closing it is FP8-engine
+work, not a config tweak.
 
 ### 3. Quantization — FP8 vs BF16, vLLM, Qwen3-8B, TP=2
 
