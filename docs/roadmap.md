@@ -20,5 +20,62 @@ evidence in this repo. Unchecked = not yet run/verified.
 ## Phase 4 — Reference architecture
 - [ ] One-command deploy (compose); a short "how an SA would hand this to a partner" guide.
 
+## Phase 5 — Follow-ups to the measured studies (specified)
+
+These are the "Remaining (roadmap)" items referenced in README Status, each with the question it
+answers, the exact method, and how to read the result.
+
+- [ ] **Tuned-vs-tuned re-run** (TRT-LLM tuned vs vLLM defaults).
+  - **Question:** at c128, default-config TRT-LLM trails vLLM by 65% in throughput with
+    TTFT p99 = 2.18 s — is that the out-of-box defaults (`GUARANTEED_NO_EVICT` scheduler +
+    chunked prefill off) or an inherent engine limit? SqueezeBits' controlled study found tuned
+    TRT-LLM *wins* at large batch — this run decides the final form of this repo's headline.
+  - **Method:** new config `configs/trtllm_pytorch_tuned.yaml` = the existing CUDA-graph config
+    plus two switches:
+    ```yaml
+    pytorch_backend_config:
+      use_cuda_graph: true
+      cuda_graph_padding_enabled: true
+      cuda_graph_max_batch_size: 256
+      enable_chunked_prefill: true        # default off (GitHub issue #4947)
+      scheduler_policy: MAX_UTILIZATION   # default GUARANTEED_NO_EVICT
+    ```
+    Serve with `CFG=/models/trtllm_pytorch_tuned.yaml bash scripts/serve_trtllm.sh
+    /models/Llama-3.1-8B-Instruct-FP8 2 8012`, **verify the settings actually took**
+    (`docker logs trtllm_serve | grep -iE 'chunked|scheduler|use_cuda_graph'` — this repo's
+    hard-won lesson: 0.20 silently ignores mis-nested keys), then
+    `bash bench/sweep.sh http://localhost:8012 trtllm_llama31_fp8_tuned` and
+    `python bench/pareto.py && python bench/roofline_check.py`.
+  - **Read-out:** tuned TRT-LLM c128 ≥ vLLM (22,783 tok/s) → the deficit was defaults; the
+    headline becomes "tuned engines are comparable; the difference is robustness of defaults".
+    Still clearly behind → defaults are not the main cause; profile the scheduler. Either way,
+    whether TTFT p99 @c128 drops from 2.18 s directly tests the scheduler/chunked-prefill
+    hypothesis.
+
+- [ ] **Compiled engine vs PyTorch backend** head-to-head.
+  - **Question:** all measured TRT-LLM numbers use the PyTorch backend. How much does the
+    pre-compiled engine add — enough to change the c128 conclusion?
+  - **Method:** `bash scripts/build_engine.sh` → `bash scripts/serve_triton.sh` (this also
+    completes the Triton `tensorrt_llm`-backend deployment item) →
+    `bash bench/sweep.sh http://localhost:8000 trtllm_compiled`. Constraint: TRT-LLM 0.20's
+    compiled path supports Llama-3.x / Qwen2.x only (not Qwen3).
+  - **Read-out:** the compiled-vs-PyTorch delta at c1 and c128. If compiled still loses to vLLM
+    at c128 → further evidence the gap is scheduler/defaults, not kernel efficiency.
+
+- [ ] **Speculative decoding under concurrency.**
+  - **Question:** the 2.82× extractive speedup is batch=1. Where does the benefit reach zero as
+    concurrency rises, and where does it become a net loss?
+  - **Method:** serve vLLM with the n-gram speculative config; run the existing sweep against the
+    extractive task set (`bash bench/sweep.sh <base> spec_extractive`, c1→c128).
+  - **Read-out:** plot speedup vs concurrency; find the ≤1.0× crossover → complete usage
+    guidance: "enable spec decode for RAG-style workloads below concurrency X, disable above".
+
+- [ ] **bench.py: write the model field into output JSON.**
+  - **Question:** (data traceability, not hypothesis testing) 60 of 61 raw JSONs lack a model
+    field; attribution currently relies on filenames.
+  - **Method:** one-line change in `bench/bench.py` to write `--model` into the output JSON;
+    re-run `bash bench/sweep.sh` for all tags.
+  - **Read-out:** every JSON becomes self-describing.
+
 ## Out of scope (for now)
 - Multi-node (NCCL over InfiniBand) — see the `nccl-collectives-bench` repo first.
