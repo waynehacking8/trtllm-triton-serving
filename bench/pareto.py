@@ -104,10 +104,11 @@ def main():
 
     h2h(w, runs, "trtllm_llama31_fp8", "vllm_llama31_fp8",
         "2. Head-to-head FP8 — Llama-3.1-8B, TP=2 (headline)",
-        "Same model & precision (FP8, `nvidia/Llama-3.1-8B-Instruct-FP8`), TRT-LLM compiled "
-        "engine + CUDA graphs vs vLLM. **TRT-LLM wins the low/mid-concurrency (latency) "
-        "regime; vLLM wins high concurrency (throughput).** This is the textbook split and "
-        "only appears once CUDA graphs are correctly on.")
+        "Same model & precision (FP8, `nvidia/Llama-3.1-8B-Instruct-FP8`), TRT-LLM's PyTorch "
+        "backend + CUDA graphs (`--backend pytorch`, *not* a pre-compiled TRT engine — a "
+        "compiled-engine comparison is future work) vs vLLM. **TRT-LLM wins the "
+        "low/mid-concurrency (latency) regime; vLLM wins high concurrency (throughput).** "
+        "This is the textbook split and only appears once CUDA graphs are correctly on.")
 
     h2h(w, runs, "trtllm_llama31", "vllm_llama31",
         "3. Head-to-head BF16 — Llama-3.1-8B, TP=2",
@@ -146,19 +147,33 @@ def _plot(runs, tags, fname, title):
         return
     if not any(t in runs for t in tags):
         return
-    plt.figure(figsize=(8, 5))
-    for tag in tags:
-        if tag not in runs:
-            continue
-        xs = [r["throughput_tok_s"] for r in runs[tag]]
-        ys = [r["ttft_p99_s"] * 1000 for r in runs[tag]]
-        plt.plot(xs, ys, "o-", label=LABEL.get(tag, tag))
-        for r in runs[tag]:
-            plt.annotate(f"c{r['concurrency']}", (r["throughput_tok_s"], r["ttft_p99_s"] * 1000),
-                         fontsize=7, alpha=0.6)
-    plt.xlabel("throughput (tok/s)"); plt.ylabel("TTFT p99 (ms)")
-    plt.title(title); plt.legend(); plt.grid(True, alpha=0.3)
-    plt.tight_layout(); plt.savefig(f"results/{fname}", dpi=130)
+    fig, ax = plt.subplots(figsize=(8.5, 5.5))
+    # Per-series annotation offsets (in points) so concurrency labels never sit on the
+    # markers, and labels from different series near the same spot do not collide.
+    offsets = [(9, 8), (9, -15), (9, -16)]
+    present = [t for t in tags if t in runs]
+    for i, tag in enumerate(present):
+        rs = runs[tag]
+        xs = [r["throughput_tok_s"] for r in rs]
+        ys = [r["ttft_p99_s"] * 1000 for r in rs]
+        ln, = ax.plot(xs, ys, "o-", lw=2, ms=7, label=LABEL.get(tag, tag))
+        dx, dy = offsets[i % len(offsets)]
+        for r in rs:
+            ax.annotate(f"c{r['concurrency']}",
+                        (r["throughput_tok_s"], r["ttft_p99_s"] * 1000),
+                        textcoords="offset points", xytext=(dx, dy),
+                        ha="left" if dx > 0 else "right",
+                        fontsize=8.5, color=ln.get_color(), fontweight="bold")
+    # log-y: TTFT spans ~20 ms to >2 s across the sweep; linear scale squashes the
+    # low-concurrency points into an unreadable band at the bottom.
+    ax.set_yscale("log")
+    ax.margins(x=0.08, y=0.15)  # headroom so point labels never clip at the frame
+    ax.set_xlabel("throughput (tok/s)"); ax.set_ylabel("TTFT p99 (ms, log scale)")
+    ax.set_title(title)
+    # lower right is always empty on a throughput-vs-TTFT pareto (curves rise to the right)
+    ax.legend(framealpha=1.0, loc="lower right")
+    ax.grid(True, alpha=0.3); ax.grid(True, alpha=0.12, which="minor")
+    fig.tight_layout(); fig.savefig(f"results/{fname}", dpi=130); plt.close(fig)
     print(f"wrote results/{fname}")
 
 
