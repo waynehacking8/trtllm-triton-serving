@@ -16,7 +16,6 @@ same client-side-streaming caveat that the roofline study flagged for the head-t
 Run: python bench/spec_decode.py   (servers on :8090 baseline, :8091 ngram)
 """
 import json, os, time
-import httpx
 
 PASSAGE = ("NVIDIA NIM packages optimized inference as microservices with an OpenAI-compatible "
            "API. TensorRT-LLM compiles models into engines with paged KV-cache and FP8 "
@@ -30,6 +29,7 @@ BASE, SPEC = "http://localhost:8090", "http://localhost:8091"
 
 
 def tps_nonstream(base, model, prompt, maxtok=200):
+    import httpx
     t0 = time.perf_counter()
     r = httpx.post(f"{base}/v1/completions",
                    json={"model": model, "prompt": prompt, "max_tokens": maxtok,
@@ -39,6 +39,7 @@ def tps_nonstream(base, model, prompt, maxtok=200):
 
 
 def acceptance(spec_base):
+    import httpx
     try:
         m = httpx.get(f"{spec_base}/metrics", timeout=10).text
         d = a = 0
@@ -50,6 +51,48 @@ def acceptance(spec_base):
         return a / d if d else 0.0
     except Exception:
         return 0.0
+
+
+def plot(src="results/spec_decode.json", fname="results/spec_decode.png"):
+    """Render results/spec_decode.json as a grouped bar chart. All numbers come from the
+    JSON — nothing is hard-coded. Aesthetic matches bench/pareto.py (matplotlib default
+    tab colors, 8×5, dpi 130, grid alpha 0.3)."""
+    try:
+        import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
+        import numpy as np
+    except Exception:
+        return
+    d = json.load(open(src))
+    rows = d["results"]
+    # short labels for the x axis (first word before the parenthesis)
+    tasks = [r["task"].split(" (")[0] for r in rows]
+    baseline = [r["baseline_tok_s"] for r in rows]
+    spec = [r["ngram_spec_tok_s"] for r in rows]
+    speedup = [r["speedup"] for r in rows]
+
+    x = np.arange(len(rows)); width = 0.38
+    fig, ax = plt.subplots(figsize=(8, 5))
+    b1 = ax.bar(x - width / 2, baseline, width, label="baseline", color="tab:gray")
+    b2 = ax.bar(x + width / 2, spec, width, label="n-gram spec decode", color="tab:blue")
+    for bars in (b1, b2):
+        for rect in bars:
+            ax.annotate(f"{rect.get_height():.0f}",
+                        (rect.get_x() + rect.get_width() / 2, rect.get_height()),
+                        ha="center", va="bottom", fontsize=8)
+    # speedup annotation above each spec bar
+    for xi, s, sp in zip(x, spec, speedup):
+        ax.annotate(f"{sp:.2f}×", (xi + width / 2, s), xytext=(0, 14),
+                    textcoords="offset points", ha="center", fontsize=9,
+                    fontweight="bold", color=("tab:green" if sp >= 1.0 else "tab:red"))
+    ax.set_xticks(x); ax.set_xticklabels(tasks)
+    ax.set_ylabel("throughput (tok/s)")
+    ax.set_title(f"n-gram speculative decoding — {d['model']}, "
+                 f"k={d['num_speculative_tokens']}, accept {d['draft_acceptance_rate']:.0%} "
+                 f"(non-streaming)")
+    ax.legend(); ax.grid(True, axis="y", alpha=0.3)
+    ax.set_ylim(0, max(spec + baseline) * 1.25)
+    fig.tight_layout(); fig.savefig(fname, dpi=130)
+    print(f"wrote {fname}")
 
 
 def main(base=BASE, spec=SPEC):
@@ -66,7 +109,12 @@ def main(base=BASE, spec=SPEC):
     os.makedirs("results", exist_ok=True)
     json.dump(out, open("results/spec_decode.json", "w"), indent=2)
     print(json.dumps(out, indent=2))
+    plot()
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "plot":
+        plot()
+    else:
+        main()

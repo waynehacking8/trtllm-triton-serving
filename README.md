@@ -87,6 +87,10 @@ config bug, not a finding.
 The 9B carries ~25 % less throughput/H100 than the 8Bs — capability-vs-cost, with numbers.
 (Frontier 2026 MoE models — GLM-5.1 744B, DeepSeek-V4, Llama-4 — need the full 8-GPU box.)
 
+**Throughput vs TTFT-p99 across the three models (TP=1, BF16): the 8Bs (blue/green) trace a tighter latency-vs-throughput frontier than the 9B (orange), which pays more TTFT for less throughput per H100:**
+
+![Cross-model throughput vs TTFT-p99 Pareto frontier for Llama-3.1-8B, Qwen3-8B, and Qwen3.5-9B on vLLM TP=1](results/pareto_models.png)
+
 ### 2. Head-to-head, **FP8** — Llama-3.1-8B, TP=2 (the headline)
 
 Same model & precision (`nvidia/Llama-3.1-8B-Instruct-FP8`), TRT-LLM's **PyTorch backend + CUDA
@@ -108,6 +112,10 @@ better. Enabling CUDA graphs alone took TRT-LLM from 162→374 tok/s (**2.3×**)
 independent confirmation of the [latency-wall study](../nccl-collectives-bench) in the sibling
 NCCL repo (CUDA-graph capture ≈ kills the ~20 µs launch floor).
 
+**The crossover, visualized (FP8, TP=2): TRT-LLM (blue) sits left-and-lower at low concurrency (faster, lower TTFT), but its TTFT-p99 shoots up past c64 while vLLM (orange) keeps extending right to ~23k tok/s — latency winner vs throughput winner in one picture:**
+
+![FP8 Llama-3.1-8B TP=2 throughput vs TTFT-p99: TensorRT-LLM+CG vs vLLM, showing the low-concurrency latency win and high-concurrency throughput crossover](results/pareto_fp8.png)
+
 ### 3. Head-to-head, BF16 — Llama-3.1-8B, TP=2
 
 | concurrency | TRT-LLM+CG | vLLM | ratio |
@@ -116,6 +124,10 @@ NCCL repo (CUDA-graph capture ≈ kills the ~20 µs launch floor).
 | 128 | 14,194 | 19,659 | 0.72× |
 
 BF16 ties at c1 (FP8 is where TRT-LLM's Hopper W8A8 edge shows); vLLM pulls ahead under load.
+
+**Same axes, BF16: the two curves overlap at low concurrency (the c1 tie) and vLLM (orange) again extends further right under load — the FP8 low-concurrency edge above is the delta this BF16 frontier is missing:**
+
+![BF16 Llama-3.1-8B TP=2 throughput vs TTFT-p99 Pareto: TensorRT-LLM+CG vs vLLM, near-tied at c1 with vLLM ahead at high concurrency](results/pareto_h2h.png)
 
 ### 4. Big model — Qwen2.5-32B, TP=4, BF16
 
@@ -126,6 +138,10 @@ BF16 ties at c1 (FP8 is where TRT-LLM's Hopper W8A8 edge shows); vLLM pulls ahea
 
 Same crossover shape at 32B across 4× H100 — competitive at low concurrency, vLLM ahead at
 saturation. (CUDA-graph fix here too: 51→114 tok/s at c1.)
+
+**The crossover holds at 32B on 4 cards: TRT-LLM (blue) and vLLM (orange) start together at c1, then vLLM stretches to ~9.4k tok/s while TRT-LLM saturates earlier — the same latency-vs-throughput split, scaled up to TP=4:**
+
+![Qwen2.5-32B TP=4 throughput vs TTFT-p99 Pareto across 4 H100: TensorRT-LLM+CG vs vLLM, tied at c1 and vLLM ahead at saturation](results/pareto_32b.png)
 
 ### 5. Quantization — vLLM, Qwen3-8B, TP=2 (FP8 vs BF16)
 
@@ -144,6 +160,10 @@ non-streaming** (see why below):
 |---|---|---|---|
 | **extractive (RAG-style, echoes context)** | 154 | **434 tok/s** | **2.82×** |
 | generative (novel text) | 154 | 136 | 0.88× |
+
+**Acceptance-gated, in one chart (batch=1, non-streaming): n-gram speculation is a 2.82× win on extractive/RAG-style output that echoes the prompt (green) and a 0.88× net loss on free-form generation (red) — n-gram drafting only helps when the output repeats the input, so the speedup follows the task, not a global switch:**
+
+![Grouped bars of baseline vs n-gram speculative-decode throughput for extractive (2.82×) and generative (0.88×) tasks on Qwen2.5-7B, batch=1 non-streaming, 68% draft acceptance](results/spec_decode.png)
 
 Draft acceptance **68 %**. The result is the whole point: speculative decoding is
 **acceptance-gated** — a **2.8× win** where the draft is usually right, a **net loss** on
