@@ -148,10 +148,17 @@ def _plot(runs, tags, fname, title):
     if not any(t in runs for t in tags):
         return
     fig, ax = plt.subplots(figsize=(8.5, 5.5))
-    # Per-series annotation offsets (in points) so concurrency labels never sit on the
-    # markers, and labels from different series near the same spot do not collide.
-    offsets = [(9, 8), (9, -15), (9, -16)]
     present = [t for t in tags if t in runs]
+    # Per-series annotation offsets (in points) so concurrency labels never sit on the
+    # markers, and labels from near-coincident series do not collide. The scheme depends on
+    # how many series share the axes:
+    #   2 series (head-to-heads): the two curves cross, so push series 0 up-right and
+    #     series 1 down-right — labels diverge away from each crossover, never stacking.
+    #   3 series (cross-model): two curves (Qwen3-8B / Llama-3.1-8B) are near-coincident the
+    #     whole sweep, so fan the three labels to three fixed vertical lanes (top/mid/bottom),
+    #     all offset right, so coincident markers still get vertically-separated labels.
+    offsets = ([(9, 8), (9, -15)] if len(present) <= 2
+               else [(11, 13), (11, -7), (11, -22)])
     for i, tag in enumerate(present):
         rs = runs[tag]
         xs = [r["throughput_tok_s"] for r in rs]

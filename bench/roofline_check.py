@@ -8,7 +8,7 @@ whole weight set once, so the ceiling is
 
 This is the sanity check that caught a real config bug in this repo: an early TRT-LLM run
 measured 162 tok/s for Llama-3.1-8B FP8 (TP=2) = only ~19% of roofline, which is physically
-implausible for a compiled engine. Root cause: CUDA graphs were silently NOT enabled (wrong
+implausible for NVIDIA's own kernels. Root cause: CUDA graphs were silently NOT enabled (wrong
 `extra_llm_api_options` schema). After the fix the same config hit 374 tok/s = ~45% of the
 TP=2 roofline / ~89% of the 1-GPU roofline — in the expected band. Numbers far below roofline
 are a red flag to debug, not to publish.
