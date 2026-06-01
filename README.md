@@ -7,10 +7,9 @@ cross-model and a quantization study. The measured runs use TensorRT-LLM's own O
 (`triton_model_repo/`) is included as the production path (not yet exercised in the
 benchmark — see Status).
 
-Built to move from "I use vLLM" to "I can stand up the NVIDIA inference stack on real
-multi-GPU hardware and reason about the trade-offs." The repo prioritizes a reproducible
-**serve → benchmark** loop, with a **controlled methodology** (every request decodes exactly
-256 tokens via `ignore_eos`, so throughput/latency compare the same work across stacks).
+The repo prioritizes a reproducible **serve → benchmark** loop, with a **controlled
+methodology** (every request decodes exactly 256 tokens via `ignore_eos`, so
+throughput/latency compare the same work across stacks).
 
 ## What this is
 - A scripted pipeline: HF checkpoint → TensorRT-LLM engine (TP=4, FP8/FP16) → Triton model repository → load test.
@@ -161,6 +160,14 @@ free-form generation where it isn't. An SA picks it per workload, not as a blank
 > touching the busy GPU 0. Reproduce: `scripts/serve_vllm.sh` / `scripts/serve_trtllm.sh`
 > (CUDA-graph config in `configs/trtllm_pytorch_cudagraph.yaml`), then `bash bench/sweep.sh`
 > and `python bench/pareto.py` + `python bench/roofline_check.py`.
+
+## References
+- [NVIDIA/TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) — engine builder this harness drives.
+- [triton-inference-server/tensorrtllm_backend](https://github.com/triton-inference-server/tensorrtllm_backend) — the Triton backend used here.
+- [vllm-project/vllm](https://github.com/vllm-project/vllm) — the baseline compared against.
+
+## Disclaimer
+Personal project for learning and benchmarking. Views and results are my own and do not represent any employer.
 
 ## Status
 **Five measured studies complete**, all under a controlled 256-token methodology with TRT-LLM
