@@ -99,8 +99,8 @@ def main():
         for t in present:
             byc = {r["concurrency"]: r["throughput_tok_s"] for r in runs[t]}
             w(f"| {LABEL[t]} | " + " | ".join(f"{byc.get(c,0):.0f}" for c in cs) + " |")
-        w("\nThe 9B carries ~25% less throughput/H100 than the 8Bs — the capability-vs-cost "
-          "trade, with numbers.\n")
+        w("\nThe 9B carries ~30% less throughput/H100 than the 8Bs (9,356 vs 13,411/13,771 "
+          "@c128) — the capability-vs-cost trade, with numbers.\n")
 
     h2h(w, runs, "trtllm_llama31_fp8", "vllm_llama31_fp8",
         "2. Head-to-head FP8 — Llama-3.1-8B, TP=2 (headline)",

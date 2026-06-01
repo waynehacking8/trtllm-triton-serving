@@ -84,7 +84,7 @@ config bug, not a finding.
 | Qwen3-8B | 145 | 13,411 |
 | Qwen3.5-9B | 127 | 9,356 |
 
-The 9B carries ~25 % less throughput/H100 than the 8Bs — capability-vs-cost, with numbers.
+The 9B carries ~30 % less throughput/H100 than the 8Bs (9,356 vs 13,411/13,771 @c128) — capability-vs-cost, with numbers.
 (Frontier 2026 MoE models — GLM-5.1 744B, DeepSeek-V4, Llama-4 — need the full 8-GPU box.)
 
 **Throughput vs TTFT-p99 across the three models (TP=1, BF16): the 8Bs (blue/green) trace a tighter latency-vs-throughput frontier than the 9B (orange), which pays more TTFT for less throughput per H100:**

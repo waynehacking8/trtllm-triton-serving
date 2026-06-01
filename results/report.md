@@ -12,7 +12,7 @@ Llama-3.1-8B (2024) vs Qwen3-8B / Qwen3.5-9B (2026):
 | Qwen3.5-9B | 127 | 1978 | 6234 | 9356 |
 | Llama-3.1-8B | 152 | 2378 | 8315 | 13771 |
 
-The 9B carries ~25% less throughput/H100 than the 8Bs — the capability-vs-cost trade, with numbers.
+The 9B carries ~30% less throughput/H100 than the 8Bs (9,356 vs 13,411/13,771 @c128) — the capability-vs-cost trade, with numbers.
 
 ## 2. Head-to-head FP8 — Llama-3.1-8B, TP=2 (headline)
 
