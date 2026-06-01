@@ -104,13 +104,31 @@ is future work) vs vLLM:
 | 64 | 13,919 | 15,447 | 0.90× | vLLM |
 | 128 | 13,802 | 22,783 | 0.61× | vLLM |
 
-**The textbook split, and it only appears with CUDA graphs correctly on:** TRT-LLM wins the
+**The split, and it only appears with CUDA graphs correctly on:** TRT-LLM wins the
 **low/mid-concurrency (latency) regime** — at c1 it's 1.25× faster (374 vs 300, ITL 2.6 vs
 3.0 ms) because CUDA-graph decode removes the per-step launch tax that dominates single-stream;
 vLLM wins the **high-concurrency (throughput) regime** where its scheduler/batching scales
 better. Enabling CUDA graphs alone took TRT-LLM from 162→374 tok/s (**2.3×**) — a direct,
 independent confirmation of the [latency-wall study](../nccl-collectives-bench) in the sibling
 NCCL repo (CUDA-graph capture ≈ kills the ~20 µs launch floor).
+
+> **Caveat — this is a default-vs-default comparison, not tuned-vs-tuned.** These TRT-LLM
+> runs use `trtllm-serve`'s out-of-box defaults: the `GUARANTEED_NO_EVICT` scheduler policy
+> (conservative admission — only admits a request when the KV cache can guarantee its
+> completion) with **chunked prefill off** (GitHub issue #4947 asks NVIDIA to enable it by
+> default). NVIDIA's own tuning docs ([Tuning Max Batch Size / Max Num Tokens][trt-tune],
+> [Useful Runtime Options][trt-runtime]) note the in-flight scheduler can fail to admit
+> large-prompt requests because in-flight requests hold the token budget — *"hurting
+> worst-case TTFT in production workloads."* That is the **likely cause of the TTFT spike at
+> c128 (2.18s)**, not an inherent engine limitation. The conclusion above therefore describes
+> **default-vs-default behavior, not tuned-vs-tuned.** Published benchmarks conflict:
+> [BentoML's][bentoml] matches our result (TRT-LLM TTFT >6s at 100 concurrent users, vLLM
+> stays low), while [SqueezeBits'][squeezebits] controlled study found the *opposite* — tuned
+> TRT-LLM wins at large batch sizes. So the transferable finding is **vLLM's out-of-box
+> defaults are more robust under high concurrency; TRT-LLM requires explicit tuning**
+> (scheduler policy, chunked prefill, `max_num_tokens`) to avoid TTFT degradation at
+> saturation — *not* that vLLM inherently wins high concurrency. A tuned-vs-tuned re-run is on
+> the roadmap (see Status).
 
 **The crossover, visualized (FP8, TP=2): TRT-LLM (blue) sits left-and-lower at low concurrency (faster, lower TTFT), but its TTFT-p99 shoots up past c64 while vLLM (orange) keeps extending right to ~23k tok/s — latency winner vs throughput winner in one picture:**
 
@@ -185,9 +203,12 @@ free-form generation where it isn't. An SA picks it per workload, not as a blank
   roofline (≈419 tok/s) = ~45 % of the TP=2 aggregate ceiling (≈838 tok/s)**, and 45 % sits
   inside that 36–56 % band.
 - **Published data**: NVIDIA's perf-overview lists Llama-3.1-8B-FP8/H100 max throughput in the
-  ~26k tok/s range (high batch) — same order as the high-concurrency numbers here; community
-  benchmarks (LMSYS, SqueezeBits) report "TRT-LLM highest, vLLM second," consistent with the
-  low/high-concurrency split measured above.
+  ~26k tok/s range (high batch) — same order as the high-concurrency numbers here. Published
+  head-to-heads *conflict* on the high-concurrency winner: [BentoML][bentoml] matches this
+  repo (TRT-LLM TTFT spikes past ~100 users, vLLM stays low), while [SqueezeBits][squeezebits]
+  found *tuned* TRT-LLM wins at large batch sizes. That conflict is exactly why the headline is
+  scoped to **default configs** (see the FP8 caveat): the split measured here is real for
+  `trtllm-serve` defaults, not a tuned-vs-tuned verdict.
 
 > Shared-box hygiene: all serving pinned to free GPUs (2–7) via `--gpus '"device=…"'`, never
 > touching the busy GPU 0. Reproduce: `scripts/serve_vllm.sh` / `scripts/serve_trtllm.sh`
@@ -198,6 +219,15 @@ free-form generation where it isn't. An SA picks it per workload, not as a blank
 - [NVIDIA/TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) — engine builder this harness drives.
 - [triton-inference-server/tensorrtllm_backend](https://github.com/triton-inference-server/tensorrtllm_backend) — the Triton backend used here.
 - [vllm-project/vllm](https://github.com/vllm-project/vllm) — the baseline compared against.
+- [NVIDIA TensorRT-LLM — Tuning Max Batch Size and Max Num Tokens][trt-tune] — why the default scheduler/token-budget choices affect TTFT under load.
+- [NVIDIA TensorRT-LLM — Useful Runtime Options][trt-runtime] — scheduler policy (`GUARANTEED_NO_EVICT` vs `MAX_UTILIZATION`) and chunked-prefill flags.
+- [BentoML — Benchmarking LLM Inference Backends][bentoml] — independent benchmark whose high-concurrency TTFT result matches this repo's.
+- [SqueezeBits — vLLM vs TensorRT-LLM (Towards Optimal Batching)][squeezebits] — controlled study where *tuned* TRT-LLM wins at large batch sizes.
+
+[trt-tune]: https://nvidia.github.io/TensorRT-LLM/performance/performance-tuning-guide/tuning-max-batch-size-and-max-num-tokens.html
+[trt-runtime]: https://nvidia.github.io/TensorRT-LLM/performance/performance-tuning-guide/useful-runtime-flags.html
+[bentoml]: https://bentoml.com/blog/benchmarking-llm-inference-backends
+[squeezebits]: https://blog.squeezebits.com/vllm-vs-tensorrtllm-2-towards-optimal-batching-for-llm-serving-31349
 
 ## Disclaimer
 Personal project for learning and benchmarking. Views and results are my own and do not represent any employer.
@@ -206,12 +236,19 @@ Personal project for learning and benchmarking. Views and results are my own and
 **Five measured studies complete**, all under a controlled 256-token methodology with TRT-LLM
 CUDA graphs correctly enabled and **every number roofline-verified**: cross-model
 (Llama-3.1-8B / Qwen3-8B / Qwen3.5-9B), FP8 and BF16 head-to-heads (Llama-3.1-8B, TP=2),
-big-model head-to-head (Qwen2.5-32B, TP=4), and FP8/BF16 quantization (Qwen3-8B). Headline:
-**TRT-LLM+CUDA-graph wins low/mid concurrency (latency), vLLM wins high concurrency
-(throughput)** — and the journey there (catching a silent CUDA-graph mis-config via a physics
-check) is the point. **All measured TRT-LLM runs use the PyTorch backend with CUDA graphs
-(`--backend pytorch`), not a pre-compiled TRT engine.** Remaining (roadmap): a **compiled-engine
-vs PyTorch-backend** head-to-head, the full Triton `tensorrt_llm`-backend (`triton_model_repo/`)
-in place of `trtllm-serve`, and an FP8 KV-cache / speculative-decoding study. Note: TRT-LLM
+big-model head-to-head (Qwen2.5-32B, TP=4), and FP8/BF16 quantization (Qwen3-8B). Headline
+(**at default configs**): **TRT-LLM+CUDA-graph wins low/mid concurrency (latency), vLLM wins
+high concurrency (throughput)** — and the journey there (catching a silent CUDA-graph
+mis-config via a physics check) is the point. This is a **default-vs-default** comparison:
+the TRT-LLM runs use `trtllm-serve` defaults (`GUARANTEED_NO_EVICT` scheduler, chunked prefill
+off), which NVIDIA's tuning docs flag as a likely cause of worst-case TTFT degradation;
+published benchmarks conflict (BentoML matches, SqueezeBits' *tuned* TRT-LLM wins at large
+batch), so the transferable claim is "vLLM's defaults are more robust at high concurrency;
+TRT-LLM needs tuning" (see the FP8 caveat above). **All measured TRT-LLM runs use the PyTorch
+backend with CUDA graphs (`--backend pytorch`), not a pre-compiled TRT engine.** Remaining
+(roadmap): a **tuned-vs-tuned re-run** (TRT-LLM with chunked prefill enabled + `MAX_UTILIZATION`
+scheduler + tuned `max_num_tokens`), a **compiled-engine vs PyTorch-backend** head-to-head, the
+full Triton `tensorrt_llm`-backend (`triton_model_repo/`) in place of `trtllm-serve`, and an
+FP8 KV-cache / speculative-decoding study. Note: TRT-LLM
 0.20's compiled-engine path supports Llama-3.x / Qwen2.x; Qwen3 / Llama-4 run on its PyTorch
 backend or vLLM.

@@ -106,9 +106,21 @@ def main():
         "2. Head-to-head FP8 — Llama-3.1-8B, TP=2 (headline)",
         "Same model & precision (FP8, `nvidia/Llama-3.1-8B-Instruct-FP8`), TRT-LLM's PyTorch "
         "backend + CUDA graphs (`--backend pytorch`, *not* a pre-compiled TRT engine — a "
-        "compiled-engine comparison is future work) vs vLLM. **TRT-LLM wins the "
-        "low/mid-concurrency (latency) regime; vLLM wins high concurrency (throughput).** "
-        "This is the textbook split and only appears once CUDA graphs are correctly on.")
+        "compiled-engine comparison is future work) vs vLLM. **At these defaults, TRT-LLM "
+        "wins the low/mid-concurrency (latency) regime; vLLM wins high concurrency "
+        "(throughput).** This only appears once CUDA graphs are correctly on. **Caveat — this "
+        "is a default-vs-default comparison, not tuned-vs-tuned:** these TRT-LLM runs use "
+        "`trtllm-serve` defaults — the `GUARANTEED_NO_EVICT` scheduler (conservative "
+        "admission) and chunked prefill *off* (GitHub issue #4947 asks NVIDIA to enable it by "
+        "default). NVIDIA's own tuning docs note the in-flight scheduler can fail to admit "
+        "large-prompt requests because in-flight requests hold the token budget, hurting "
+        "worst-case TTFT — the likely cause of the TTFT spike at c128 (2.18s), not an inherent "
+        "engine limit. Published benchmarks conflict: BentoML matches this (TRT-LLM TTFT >6s "
+        "at 100 users) while SqueezeBits' controlled study found tuned TRT-LLM *wins* at large "
+        "batch sizes. So the transferable finding is **vLLM's defaults are more robust at high "
+        "concurrency; TRT-LLM needs explicit tuning** (scheduler policy, chunked prefill, "
+        "`max_num_tokens`) to avoid TTFT degradation at saturation — *not* that vLLM inherently "
+        "wins high concurrency. A tuned-vs-tuned re-run is on the roadmap.")
 
     h2h(w, runs, "trtllm_llama31", "vllm_llama31",
         "3. Head-to-head BF16 — Llama-3.1-8B, TP=2",
