@@ -3,10 +3,12 @@
 correctly-applied CUDA-graph config — see README "verification" note):
 
   1. Cross-model (vLLM TP=1)            — Llama-3.1-8B / Qwen3-8B / Qwen3.5-9B
-  2. Head-to-head BF16 (Llama-3.1-8B TP=2)   — TensorRT-LLM+CUDA-graph vs vLLM
-  3. Head-to-head FP8  (Llama-3.1-8B TP=2)   — TensorRT-LLM+CUDA-graph vs vLLM  [headline]
+  2. Head-to-head FP8  (Llama-3.1-8B TP=2)   — TensorRT-LLM+CUDA-graph vs vLLM  [headline]
+  3. Head-to-head BF16 (Llama-3.1-8B TP=2)   — TensorRT-LLM+CUDA-graph vs vLLM
   4. Head-to-head BF16 (Qwen2.5-32B TP=4)    — TensorRT-LLM+CUDA-graph vs vLLM
   5. Quantization (Qwen3-8B vLLM TP=2)       — FP8 vs BF16
+  6. Tuned-vs-tuned (Llama-3.1-8B FP8 TP=2)  — TRT-LLM defaults vs +chunked-prefill+MAX_UTILIZATION
+  7. Compiled engine vs PyTorch backend (Llama-3.1-8B BF16 TP=2)
 
 All requests decode exactly 256 tokens (ignore_eos). Consumes results/<tag>-c<N>.json.
 """
@@ -19,12 +21,17 @@ LABEL = {
     "trtllm_llama31_fp8": "TensorRT-LLM+CG", "vllm_llama31_fp8": "vLLM",
     "trtllm_qwen25_32b": "TensorRT-LLM+CG", "vllm_qwen25_32b": "vLLM",
     "vllm_bf16": "vLLM BF16", "vllm_fp8": "vLLM FP8",
+    "trtllm_llama31_fp8_tuned": "TRT-LLM tuned (chunked prefill + MAX_UTIL)",
+    "trtllm_compiled_bf16": "TRT-LLM compiled engine",
+    "trtllm_compiled_bf16_cg": "TRT-LLM compiled engine + CUDA graphs",
 }
 GROUP_A = ["xm_qwen3_8b", "xm_qwen35_9b", "xm_llama31_8b"]
 GROUP_B = ["trtllm_llama31", "vllm_llama31"]
 GROUP_FP8 = ["trtllm_llama31_fp8", "vllm_llama31_fp8"]
 GROUP_D = ["trtllm_qwen25_32b", "vllm_qwen25_32b"]
 GROUP_C = ["vllm_bf16", "vllm_fp8"]
+GROUP_TUNED = ["trtllm_llama31_fp8", "trtllm_llama31_fp8_tuned", "vllm_llama31_fp8"]
+GROUP_ENGINE = ["trtllm_llama31", "trtllm_compiled_bf16", "trtllm_compiled_bf16_cg", "vllm_llama31"]
 
 
 def load_sweeps():
@@ -105,22 +112,18 @@ def main():
     h2h(w, runs, "trtllm_llama31_fp8", "vllm_llama31_fp8",
         "2. Head-to-head FP8 — Llama-3.1-8B, TP=2 (headline)",
         "Same model & precision (FP8, `nvidia/Llama-3.1-8B-Instruct-FP8`), TRT-LLM's PyTorch "
-        "backend + CUDA graphs (`--backend pytorch`, *not* a pre-compiled TRT engine — a "
-        "compiled-engine comparison is future work) vs vLLM. **At these defaults, TRT-LLM "
-        "wins the low/mid-concurrency (latency) regime; vLLM wins high concurrency "
-        "(throughput).** This only appears once CUDA graphs are correctly on. **Caveat — this "
-        "is a default-vs-default comparison, not tuned-vs-tuned:** these TRT-LLM runs use "
-        "`trtllm-serve` defaults — the `GUARANTEED_NO_EVICT` scheduler (conservative "
-        "admission) and chunked prefill *off* (GitHub issue #4947 asks NVIDIA to enable it by "
-        "default). NVIDIA's own tuning docs note the in-flight scheduler can fail to admit "
-        "large-prompt requests because in-flight requests hold the token budget, hurting "
-        "worst-case TTFT — the likely cause of the TTFT spike at c128 (2.18s), not an inherent "
-        "engine limit. Published benchmarks conflict: BentoML matches this (TRT-LLM TTFT >6s "
-        "at 100 users) while SqueezeBits' controlled study found tuned TRT-LLM *wins* at large "
-        "batch sizes. So the transferable finding is **vLLM's defaults are more robust at high "
-        "concurrency; TRT-LLM needs explicit tuning** (scheduler policy, chunked prefill, "
-        "`max_num_tokens`) to avoid TTFT degradation at saturation — *not* that vLLM inherently "
-        "wins high concurrency. A tuned-vs-tuned re-run is on the roadmap.")
+        "backend + CUDA graphs (`--backend pytorch`) vs vLLM. **TRT-LLM wins the "
+        "low/mid-concurrency (latency) regime; vLLM wins high concurrency (throughput).** "
+        "This only appears once CUDA graphs are correctly on. The earlier caveat — that the "
+        "c128 deficit might just be `trtllm-serve` defaults (`GUARANTEED_NO_EVICT` scheduler, "
+        "chunked prefill off, GitHub issue #4947) — has now been **tested and rejected**: "
+        "study 6 below re-runs with chunked prefill + `MAX_UTILIZATION` and the c128 "
+        "throughput does not move (13.8k both ways), and study 7 shows the compiled engine "
+        "lands in the same place. The gap at high concurrency is engine-runtime-level in "
+        "TRT-LLM 0.20 for this decode-heavy workload, not a configuration artifact. "
+        "(Published comparisons vary — SqueezeBits found tuned TRT-LLM winning at large batch "
+        "on older versions/different workloads; BentoML found TTFT collapse at 100 users — "
+        "which is exactly why this repo measures rather than quotes.)")
 
     h2h(w, runs, "trtllm_llama31", "vllm_llama31",
         "3. Head-to-head BF16 — Llama-3.1-8B, TP=2",
@@ -143,6 +146,90 @@ def main():
             w(f"| {c} | {b:.0f} | {f:.0f} | {f/b:.2f}× |")
         w("\nFP8 wins most at low concurrency (memory-bandwidth-bound decode).\n")
 
+    if "trtllm_llama31_fp8_tuned" in runs:
+        w("## 6. Tuned-vs-tuned — does TRT-LLM's c128 deficit come from its defaults?\n")
+        w("Same FP8 serve command as study 2, plus `enable_chunked_prefill: true` and "
+          "`scheduler_config.capacity_scheduler_policy: MAX_UTILIZATION` "
+          "(`configs/trtllm_pytorch_tuned.yaml`; key nesting verified against the installed "
+          "0.20 wheel — both are TOP-LEVEL LlmArgs keys, *not* `pytorch_backend_config` "
+          "children as some docs suggest, which would be silently ignored).\n")
+        base = {r["concurrency"]: r for r in runs.get("trtllm_llama31_fp8", [])}
+        tuned = {r["concurrency"]: r for r in runs["trtllm_llama31_fp8_tuned"]}
+        vl = {r["concurrency"]: r for r in runs.get("vllm_llama31_fp8", [])}
+        w("| concurrency | TRT defaults tok/s | TRT tuned tok/s | TRT defaults TTFT p99 | TRT tuned TTFT p99 | vLLM tok/s |")
+        w("|---|---|---|---|---|---|")
+        for c in sorted(tuned):
+            b, t = base.get(c, {}), tuned[c]
+            v = vl.get(c, {})
+            w(f"| {c} | {b.get('throughput_tok_s', '—')} | {t['throughput_tok_s']} | "
+              f"{b.get('ttft_p99_s', '—')}s | {t['ttft_p99_s']}s | {v.get('throughput_tok_s', '—')} |")
+        w("")
+        w("**Read-out: throughput is unchanged** (c128: 13,803 default vs 13,828 tuned — 0.2%); "
+          "the c64 saturation ceiling is identical. **TTFT p99 at c128 improves 25%** "
+          "(2.18s → 1.64s) — chunked prefill does what it promises for admission latency — "
+          "but the throughput gap to vLLM (22.8k) is *not* a scheduler/defaults artifact. "
+          "Combined with study 7 (compiled engine, same ceiling), the deficit is in the "
+          "engine runtime itself for this workload on 0.20.\n")
+
+    if any(t in runs for t in ("trtllm_compiled_bf16", "trtllm_compiled_bf16_cg")):
+        w("## 7. Compiled TRT engine vs PyTorch backend — BF16 Llama-3.1-8B TP=2\n")
+        w("`trtllm-build` engine (bfloat16, TP=2, `--use_paged_context_fmha enable`, "
+          "`scripts/build_engine.sh`) served through the same `trtllm-serve` OpenAI frontend "
+          "as the PyTorch-backend runs — only the executor differs. The +CG variant adds "
+          "`extended_runtime_perf_knob_config.cuda_graph_mode: true` "
+          "(`configs/trtllm_engine_cudagraph.yaml`).\n")
+        cols = {"trtllm_llama31": "PyTorch backend + CG",
+                "trtllm_compiled_bf16": "compiled engine",
+                "trtllm_compiled_bf16_cg": "compiled engine + CG",
+                "vllm_llama31": "vLLM"}
+        present = [t for t in cols if t in runs]
+        cs = sorted({r["concurrency"] for t in present for r in runs[t]})
+        w("| concurrency | " + " | ".join(cols[t] for t in present) + " |")
+        w("|---|" + "---|" * len(present))
+        for c in cs:
+            vals = []
+            for t in present:
+                byc = {r["concurrency"]: r["throughput_tok_s"] for r in runs[t]}
+                vals.append(f"{byc.get(c, 0):.0f}")
+            w(f"| {c} | " + " | ".join(vals) + " |")
+        w("")
+        w("**Read-out: the compiled engine and the PyTorch backend land within ~5% of each "
+          "other at every concurrency** (c1: 220 vs 230; c128: 14.8k vs 14.2k) — and both "
+          "still trail vLLM by ~25% at c128. Two further observations: (1) CUDA graphs add "
+          "only ~6% to the compiled engine at c1 (TRT already fuses kernels at build time) "
+          "versus the 2.3× they added to the PyTorch backend (162→374 FP8) — the lever moves "
+          "to wherever launch overhead lives. (2) The same engine served through the Triton "
+          "`tensorrt_llm` backend's ensemble path measures ~187 tok/s at c1 (~15% below "
+          "trtllm-serve) — the ensemble's Python pre/post-processing hop; see "
+          "`scripts/setup_triton_repo.sh`.\n")
+
+    if os.path.exists("results/spec_concurrency.json"):
+        sc = json.load(open("results/spec_concurrency.json"))
+        w("## 8. Speculative decoding under concurrency — where does the benefit end?\n")
+        w(f"n-gram (prompt-lookup) speculative decoding, {sc['model']}, extractive/RAG-style "
+          "task, non-streaming (see `bench/spec_concurrency.py`). The batch=1 study showed "
+          "2.8–3.5×; this study finds where the speedup dies as concurrency rises:\n")
+        w("| concurrency | baseline tok/s | ngram tok/s | speedup | draft acceptance |")
+        w("|---|---|---|---|---|")
+        for r in sc["rows"]:
+            w(f"| {r['concurrency']} | {r['baseline_tok_s']} | {r['ngram_tok_s']} | "
+              f"**{r['speedup']:.2f}×** | {r['draft_acceptance']:.0%} |")
+        cross = sc.get("crossover_concurrency")
+        w("")
+        w(f"**Read-out: the speedup decays monotonically (3.5× → 1.18×) while draft acceptance "
+          "stays ~97% flat** — so the decay is *not* the draft getting worse; it is the "
+          "compute-bound transition predicted by the spec-decode literature (Nightjar, "
+          "arXiv:2512.22420; vLLM docs): at small batch the GPU is memory-bound and "
+          "verification is free, at large batch every verified-then-rejected token competes "
+          "with other requests for compute. "
+          + (f"Crossover below 1.0× observed at c={cross}." if cross else
+             "No <1.0× crossover up to c=128 on this task; extrapolating the decay puts it "
+             "near c≈256.")
+          + " Deployment guidance: enable n-gram spec decode for RAG-style/extractive "
+          "workloads when per-replica concurrency stays below ~32 (≥2× speedup); it is "
+          "merely neutral by c≈128.\n")
+        w("![spec decode vs concurrency](spec_concurrency.png)\n")
+
     os.makedirs("results", exist_ok=True)
     open("results/report.md", "w").write("\n".join(L) + "\n")
     print("wrote results/report.md")
@@ -150,6 +237,8 @@ def main():
     _plot(runs, GROUP_B, "pareto_h2h.png", "BF16 head-to-head — Llama-3.1-8B TP=2")
     _plot(runs, GROUP_D, "pareto_32b.png", "Qwen2.5-32B TP=4 head-to-head")
     _plot(runs, GROUP_A, "pareto_models.png", "Cross-model — vLLM TP=1")
+    _plot(runs, GROUP_TUNED, "pareto_tuned.png", "TRT-LLM defaults vs tuned vs vLLM — FP8 TP=2")
+    _plot(runs, GROUP_ENGINE, "pareto_engine.png", "Compiled engine vs PyTorch backend — BF16 TP=2")
 
 
 def _plot(runs, tags, fname, title):

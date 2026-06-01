@@ -1,0 +1,20 @@
+# TensorRT-LLM 0.20 PyTorch backend — TUNED config for the tuned-vs-tuned re-run.
+#
+# = the measured CUDA-graph config (trtllm_pytorch_cudagraph.yaml) plus the two
+# throughput switches that default off/conservative in 0.20:
+#   * chunked prefill         (GitHub issue #4947 — default off in 0.20)
+#   * MAX_UTILIZATION scheduler (default GUARANTEED_NO_EVICT)
+#
+# KEY NESTING (verified by introspecting the installed 0.20 wheel, not the docs):
+#   - CUDA-graph keys live under pytorch_backend_config (dataclass PyTorchConfig)
+#   - enable_chunked_prefill is a TOP-LEVEL LlmArgs key
+#   - scheduler_config.capacity_scheduler_policy is a TOP-LEVEL LlmArgs key
+# Mis-nesting (e.g. putting enable_chunked_prefill under pytorch_backend_config) is
+# accepted and SILENTLY IGNORED — always verify the serve log echoes the values.
+pytorch_backend_config:
+  use_cuda_graph: true
+  cuda_graph_padding_enabled: true
+  cuda_graph_max_batch_size: 256
+enable_chunked_prefill: true
+scheduler_config:
+  capacity_scheduler_policy: MAX_UTILIZATION

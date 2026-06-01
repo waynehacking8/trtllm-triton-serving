@@ -1,0 +1,56 @@
+{
+  "model": "qwen2.5-7b",
+  "tag": "baseline",
+  "max_tokens": 200,
+  "task": "extractive",
+  "rows": [
+    {
+      "concurrency": 1,
+      "requests": 4,
+      "out_tokens_total": 800,
+      "wall_s": 4.806,
+      "throughput_tok_s": 166.4,
+      "draft_acceptance": null
+    },
+    {
+      "concurrency": 4,
+      "requests": 16,
+      "out_tokens_total": 3200,
+      "wall_s": 4.979,
+      "throughput_tok_s": 642.7,
+      "draft_acceptance": null
+    },
+    {
+      "concurrency": 16,
+      "requests": 64,
+      "out_tokens_total": 12800,
+      "wall_s": 5.17,
+      "throughput_tok_s": 2475.9,
+      "draft_acceptance": null
+    },
+    {
+      "concurrency": 32,
+      "requests": 128,
+      "out_tokens_total": 25600,
+      "wall_s": 5.459,
+      "throughput_tok_s": 4689.6,
+      "draft_acceptance": null
+    },
+    {
+      "concurrency": 64,
+      "requests": 256,
+      "out_tokens_total": 51200,
+      "wall_s": 6.762,
+      "throughput_tok_s": 7571.5,
+      "draft_acceptance": null
+    },
+    {
+      "concurrency": 128,
+      "requests": 512,
+      "out_tokens_total": 102400,
+      "wall_s": 17.452,
+      "throughput_tok_s": 5867.6,
+      "draft_acceptance": null
+    }
+  ]
+}

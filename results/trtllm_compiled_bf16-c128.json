@@ -1,0 +1,13 @@
+{
+  "model": "engine-llama31-tp2-bf16",
+  "concurrency": 128,
+  "requests": 1024,
+  "wall_s": 17.878,
+  "throughput_tok_s": 14662.7,
+  "out_tokens_mean": 256.0,
+  "ttft_p50_s": 0.305,
+  "ttft_p99_s": 1.1433,
+  "itl_p50_ms": 7.06,
+  "itl_p99_ms": 9.72,
+  "itl_mean_ms": 7.27
+}

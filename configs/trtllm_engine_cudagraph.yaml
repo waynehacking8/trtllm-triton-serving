@@ -1,0 +1,14 @@
+# TensorRT-LLM 0.20 — compiled-engine (C++ executor) runtime config with CUDA graphs.
+#
+# The compiled-engine path does NOT read pytorch_backend_config (that is PyTorch-backend
+# only). Its CUDA-graph switch lives in the executor's perf-knob config:
+#   LlmArgs.extended_runtime_perf_knob_config.cuda_graph_mode
+# (verified against the installed 0.20 wheel's LlmArgs field list + field_mapping in
+# tensorrt_llm/llmapi/llm_args.py update_llm_args_with_extra_dict).
+#
+# multi_block_mode improves long-context decode attention; on by default in newer
+# versions, explicit here for determinism.
+extended_runtime_perf_knob_config:
+  cuda_graph_mode: true
+  cuda_graph_cache_size: 256
+  multi_block_mode: true

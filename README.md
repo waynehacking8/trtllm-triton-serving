@@ -1,13 +1,13 @@
 # TensorRT-LLM + Triton Multi-GPU Serving
 
 Production-style LLM serving on the NVIDIA-native stack — **TensorRT-LLM**
-tensor-parallel across **H100 (NVLink)**, benchmarked head-to-head against **vLLM**, plus a
-cross-model and a quantization study. The measured TRT-LLM runs use TensorRT-LLM's own OpenAI
-server (`trtllm-serve`) on its **PyTorch backend with CUDA graphs** (`--backend pytorch`,
-`pytorch_backend_config.use_cuda_graph`), tensor-parallel **TP=2 for Llama-3.1-8B and TP=4 for
-Qwen2.5-32B** — *not* a pre-compiled TRT engine; a compiled-engine comparison is future work
-(see Status). A **Triton + `tensorrt_llm`-backend** deployment template (`triton_model_repo/`)
-is included as the production path (not yet exercised in the benchmark — see Status).
+tensor-parallel across **H100 (NVLink)**, benchmarked head-to-head against **vLLM**, plus
+cross-model, quantization, scheduler-tuning, compiled-engine and speculative-decoding studies.
+TRT-LLM is measured **three ways**: its **PyTorch backend with CUDA graphs**
+(`--backend pytorch`, `pytorch_backend_config.use_cuda_graph`), a **pre-compiled TRT engine**
+(`trtllm-build`, served through the same `trtllm-serve` frontend), and the engine deployed
+behind **Triton's `tensorrt_llm` backend** (full ensemble model repository,
+`scripts/setup_triton_repo.sh` — deployed and smoke-tested on the box).
 
 The repo prioritizes a reproducible **serve → benchmark** loop, with a **controlled
 methodology** (every request decodes exactly 256 tokens via `ignore_eos`, so
@@ -112,23 +112,15 @@ better. Enabling CUDA graphs alone took TRT-LLM from 162→374 tok/s (**2.3×**)
 independent confirmation of the [latency-wall study](../nccl-collectives-bench) in the sibling
 NCCL repo (CUDA-graph capture ≈ kills the ~20 µs launch floor).
 
-> **Caveat — this is a default-vs-default comparison, not tuned-vs-tuned.** These TRT-LLM
-> runs use `trtllm-serve`'s out-of-box defaults: the `GUARANTEED_NO_EVICT` scheduler policy
-> (conservative admission — only admits a request when the KV cache can guarantee its
-> completion) with **chunked prefill off** (GitHub issue #4947 asks NVIDIA to enable it by
-> default). NVIDIA's own tuning docs ([Tuning Max Batch Size / Max Num Tokens][trt-tune],
-> [Useful Runtime Options][trt-runtime]) note the in-flight scheduler can fail to admit
-> large-prompt requests because in-flight requests hold the token budget — *"hurting
-> worst-case TTFT in production workloads."* That is the **likely cause of the TTFT spike at
-> c128 (2.18s)**, not an inherent engine limitation. The conclusion above therefore describes
-> **default-vs-default behavior, not tuned-vs-tuned.** Published benchmarks conflict:
-> [BentoML's][bentoml] matches our result (TRT-LLM TTFT >6s at 100 concurrent users, vLLM
-> stays low), while [SqueezeBits'][squeezebits] controlled study found the *opposite* — tuned
-> TRT-LLM wins at large batch sizes. So the transferable finding is **vLLM's out-of-box
-> defaults are more robust under high concurrency; TRT-LLM requires explicit tuning**
-> (scheduler policy, chunked prefill, `max_num_tokens`) to avoid TTFT degradation at
-> saturation — *not* that vLLM inherently wins high concurrency. A tuned-vs-tuned re-run is on
-> the roadmap (see Status).
+> **The "is it just the defaults?" question — asked, then answered.** These runs use
+> `trtllm-serve`'s out-of-box defaults (`GUARANTEED_NO_EVICT` scheduler, chunked prefill off
+> — GitHub issue #4947), and the original version of this README could only flag that as a
+> caveat because published benchmarks conflict ([BentoML][bentoml] matches our result;
+> [SqueezeBits][squeezebits] found tuned TRT-LLM winning at large batch). **Study 7 below
+> settles it for this workload**: re-running with chunked prefill + `MAX_UTILIZATION` moves
+> c128 throughput by 0.2% (it does cut TTFT p99 by 25%), and study 8 shows the compiled
+> engine lands on the same ceiling. The c128 deficit is engine-runtime-level in TRT-LLM 0.20
+> for this decode-heavy workload — not a configuration artifact, and not kernel quality.
 
 **The crossover, visualized (FP8, TP=2): TRT-LLM (blue) sits left-and-lower at low concurrency (faster, lower TTFT), but its TTFT-p99 shoots up past c64 while vLLM (orange) keeps extending right to ~23k tok/s — latency winner vs throughput winner in one picture:**
 
@@ -193,6 +185,85 @@ free-form generation where it isn't. An SA picks it per workload, not as a blank
   non-streaming reveals the true 2.8× — the same measurement lesson as the head-to-heads.
   (`bench/spec_decode.py`, `results/spec_decode.json`.)
 
+### 7. Tuned-vs-tuned — is the c128 deficit just `trtllm-serve` defaults? (No.)
+
+The follow-up the FP8 caveat demanded. Same FP8 serve command as study 2, plus the two
+switches the tuning docs point at (`configs/trtllm_pytorch_tuned.yaml`):
+`enable_chunked_prefill: true` + `scheduler_config.capacity_scheduler_policy: MAX_UTILIZATION`.
+Key nesting verified by **introspecting the installed 0.20 wheel** (both are top-level LlmArgs
+keys; putting them under `pytorch_backend_config` — as the obvious guess suggests — is
+accepted and silently ignored, the same trap as the CUDA-graph config):
+
+| concurrency | TRT defaults | TRT tuned | vLLM | TRT defaults TTFT p99 | TRT tuned TTFT p99 |
+|---|---|---|---|---|---|
+| 1 | 374 | 377 | 300 | 0.030s | 0.029s |
+| 32 | 9,256 | 8,573 | 8,809 | 0.118s | 0.693s |
+| 64 | 13,919 | 13,498 | 15,447 | 0.915s | 0.216s |
+| 128 | 13,803 | **13,828** | 22,783 | 2.180s | **1.644s** |
+
+**Throughput does not move (0.2% at c128); TTFT p99 improves 25%.** Chunked prefill does what
+it promises for admission latency, but the throughput ceiling — TRT-LLM saturates at ~13.8k by
+c64 while vLLM keeps scaling to 22.8k — is unchanged. Combined with study 8, the deficit is in
+the engine runtime, not the scheduler defaults.
+
+![TRT-LLM defaults vs tuned vs vLLM](results/pareto_tuned.png)
+
+### 8. Compiled TRT engine vs PyTorch backend (+ the Triton deployment)
+
+The other "maybe it's not a fair fight" hypothesis: all TRT-LLM numbers above use the PyTorch
+backend — would the **pre-compiled engine** (`trtllm-build`) change the story?
+`scripts/build_engine.sh` builds a bfloat16 TP=2 engine (~3 min for 8B); it is served through
+the **same `trtllm-serve` OpenAI frontend**, so the executor is the only variable. The +CG row
+adds `extended_runtime_perf_knob_config.cuda_graph_mode: true`
+(`configs/trtllm_engine_cudagraph.yaml` — the C++ executor's CUDA-graph knob; the PyTorch
+backend's `pytorch_backend_config` is ignored on this path):
+
+| concurrency | PyTorch backend + CG | compiled engine | compiled engine + CG | vLLM |
+|---|---|---|---|---|
+| 1 | 230 | 207 | 220 | 228 |
+| 32 | 5,749 | 5,443 | 5,640 | 6,831 |
+| 64 | 10,614 | 9,733 | 9,985 | 12,031 |
+| 128 | 14,194 | 14,663 | **14,802** | 19,659 |
+
+**The compiled engine and the PyTorch backend are within ~5% of each other everywhere** — and
+both trail vLLM by ~25% at c128. Two details worth quoting:
+- **CUDA graphs add only ~6% to the compiled engine at c1**, versus the **2.3×** they added to
+  the PyTorch backend (162→374, FP8). TRT already fuses kernels at build time; the launch-tax
+  lever moves to wherever launch overhead actually lives.
+- The same engine deployed behind **Triton's `tensorrt_llm` backend** (full ensemble repo:
+  preprocessing → tensorrt_llm → postprocessing + BLS, `scripts/setup_triton_repo.sh`,
+  TP=2 via MPI) measures **~187 tok/s at c1 through the ensemble path — ~15% below
+  `trtllm-serve`** on the identical engine: the ensemble's Python pre/post-processing hop is
+  not free. Production latency paths should use the BLS model or Triton's OpenAI frontend.
+
+![compiled engine vs PyTorch backend](results/pareto_engine.png)
+
+### 9. Speculative decoding under concurrency — where does the 2.8× go?
+
+Study 6 is batch=1. Serving is not batch=1, and speculation costs compute that stops being
+free once the GPU is busy (the literature predicts a crossover: Nightjar, arXiv:2512.22420).
+Measured: same extractive task, baseline vs n-gram vLLM servers run sequentially on the same
+GPU, non-streaming, c1→c128 (`bench/spec_concurrency.py`):
+
+| concurrency | baseline tok/s | n-gram tok/s | speedup | draft acceptance |
+|---|---|---|---|---|
+| 1 | 166 | 585 | **3.51×** | 97% |
+| 4 | 643 | 1,836 | 2.86× | 99% |
+| 16 | 2,476 | 6,309 | 2.55× | 98% |
+| 32 | 4,690 | 9,607 | 2.05× | 97% |
+| 64 | 7,572 | 10,956 | 1.45× | 98% |
+| 128 | 5,868 | 6,919 | **1.18×** | 97% |
+
+**The speedup decays monotonically (3.5× → 1.18×) while draft acceptance stays flat at ~97%.**
+That flat acceptance line is the finding: the decay is *not* the draft getting worse — it is
+the memory-bound → compute-bound transition. At c1 the GPU has idle compute, so verifying 5
+draft tokens per step is free; at c128 every verified-then-rejected token competes with other
+requests' work. No <1.0× crossover up to c128 on this task; extrapolating the decay puts
+break-even near c≈256. **Deployment guidance: enable n-gram spec decode for RAG-style replicas
+running below ~c32 (≥2× win); it is merely neutral by c≈128.**
+
+![spec decode speedup vs concurrency](results/spec_concurrency.png)
+
 ### Verification & cross-validation
 
 - **Roofline** (`bench/roofline_check.py`): all corrected c1 numbers land at **36–56 % of the
@@ -206,9 +277,11 @@ free-form generation where it isn't. An SA picks it per workload, not as a blank
   ~26k tok/s range (high batch) — same order as the high-concurrency numbers here. Published
   head-to-heads *conflict* on the high-concurrency winner: [BentoML][bentoml] matches this
   repo (TRT-LLM TTFT spikes past ~100 users, vLLM stays low), while [SqueezeBits][squeezebits]
-  found *tuned* TRT-LLM wins at large batch sizes. That conflict is exactly why the headline is
-  scoped to **default configs** (see the FP8 caveat): the split measured here is real for
-  `trtllm-serve` defaults, not a tuned-vs-tuned verdict.
+  found *tuned* TRT-LLM wins at large batch sizes. **This repo resolved the conflict for its
+  own workload by running the tuned config (study 7) and the compiled engine (study 8): neither
+  closes the c128 gap** — for short-prompt, decode-heavy serving on TRT-LLM 0.20, the deficit
+  is real and engine-level. (SqueezeBits' result used different versions and a prefill-heavier
+  workload — both findings can be true; that is exactly why you measure your own workload.)
 
 > Shared-box hygiene: all serving pinned to free GPUs (2–7) via `--gpus '"device=…"'`, never
 > touching the busy GPU 0. Reproduce: `scripts/serve_vllm.sh` / `scripts/serve_trtllm.sh`
@@ -233,22 +306,24 @@ free-form generation where it isn't. An SA picks it per workload, not as a blank
 Personal project for learning and benchmarking. Views and results are my own and do not represent any employer.
 
 ## Status
-**Five measured studies complete**, all under a controlled 256-token methodology with TRT-LLM
-CUDA graphs correctly enabled and **every number roofline-verified**: cross-model
-(Llama-3.1-8B / Qwen3-8B / Qwen3.5-9B), FP8 and BF16 head-to-heads (Llama-3.1-8B, TP=2),
-big-model head-to-head (Qwen2.5-32B, TP=4), and FP8/BF16 quantization (Qwen3-8B). Headline
-(**at default configs**): **TRT-LLM+CUDA-graph wins low/mid concurrency (latency), vLLM wins
-high concurrency (throughput)** — and the journey there (catching a silent CUDA-graph
-mis-config via a physics check) is the point. This is a **default-vs-default** comparison:
-the TRT-LLM runs use `trtllm-serve` defaults (`GUARANTEED_NO_EVICT` scheduler, chunked prefill
-off), which NVIDIA's tuning docs flag as a likely cause of worst-case TTFT degradation;
-published benchmarks conflict (BentoML matches, SqueezeBits' *tuned* TRT-LLM wins at large
-batch), so the transferable claim is "vLLM's defaults are more robust at high concurrency;
-TRT-LLM needs tuning" (see the FP8 caveat above). **All measured TRT-LLM runs use the PyTorch
-backend with CUDA graphs (`--backend pytorch`), not a pre-compiled TRT engine.** Remaining
-(roadmap): a **tuned-vs-tuned re-run** (TRT-LLM with chunked prefill enabled + `MAX_UTILIZATION`
-scheduler + tuned `max_num_tokens`), a **compiled-engine vs PyTorch-backend** head-to-head, the
-full Triton `tensorrt_llm`-backend (`triton_model_repo/`) in place of `trtllm-serve`, and an
-FP8 KV-cache / speculative-decoding study. Note: TRT-LLM
-0.20's compiled-engine path supports Llama-3.x / Qwen2.x; Qwen3 / Llama-4 run on its PyTorch
-backend or vLLM.
+**Nine measured studies complete**, all under a controlled 256-token methodology with TRT-LLM
+CUDA graphs correctly enabled and **every concurrency-1 number roofline-verified** (36–56% of
+the TP-aggregate HBM ceiling, nothing implausible): cross-model (Llama-3.1-8B / Qwen3-8B /
+Qwen3.5-9B), FP8 and BF16 head-to-heads (Llama-3.1-8B, TP=2), big-model head-to-head
+(Qwen2.5-32B, TP=4), FP8/BF16 quantization (Qwen3-8B), **tuned-vs-tuned** (chunked prefill +
+`MAX_UTILIZATION`), **compiled engine vs PyTorch backend** (+ Triton `tensorrt_llm`-backend
+deployment, deployed and measured), batch=1 speculative decoding, and **speculative decoding
+under concurrency**.
+
+Headline: **TRT-LLM+CUDA-graph wins low/mid concurrency (latency) — FP8 c1 374 vs 300 tok/s;
+vLLM wins high concurrency (throughput) — c128 22.8k vs 13.8k.** The high-concurrency deficit
+was hypothesis-tested: it is **not** the scheduler defaults (study 7), **not** the PyTorch
+backend (study 8), and **not** CUDA graphs (both paths verified on). It is engine-runtime-level
+in TRT-LLM 0.20 for decode-heavy short-prompt serving. The journey — catching a silent
+CUDA-graph mis-config with a physics check, then killing two plausible explanations with
+controlled experiments — is the portfolio point.
+
+Remaining (roadmap): FP8 KV-cache study, genai-perf cross-check of the custom harness,
+draft-model (EAGLE-class) speculative decoding, multi-node. Note: TRT-LLM 0.20's
+compiled-engine path supports Llama-3.x / Qwen2.x; Qwen3 / Llama-4 run on its PyTorch backend
+or vLLM.

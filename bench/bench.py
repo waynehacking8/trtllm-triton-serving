@@ -56,7 +56,10 @@ async def run(base, concurrency, total, max_tokens, model):
     toks = sum(r["tokens"] for r in res)
     ttfts = [r["ttft"] for r in res]
     itls = [r["itl"] for r in res if r["itl"] > 0]
-    return {"concurrency": concurrency, "requests": total, "wall_s": round(wall, 3),
+    # "model" makes every result JSON self-describing (data traceability) — without it,
+    # attribution relies on the output filename alone.
+    return {"model": model,
+            "concurrency": concurrency, "requests": total, "wall_s": round(wall, 3),
             "throughput_tok_s": round(toks / wall, 1),
             "out_tokens_mean": round(toks / len(res), 1),
             "ttft_p50_s": round(pct(ttfts, 0.5), 4), "ttft_p99_s": round(pct(ttfts, 0.99), 4),

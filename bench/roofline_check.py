@@ -25,8 +25,9 @@ CONFIGS = [
 ]
 # measured concurrency-1 throughput (tok/s) — fill from results/*-c1.json
 MEASURED = {
-    "Llama-3.1-8B BF16, TP=2": {"TRT-LLM+CG": None, "vLLM": None},
-    "Llama-3.1-8B FP8,  TP=2": {"TRT-LLM+CG": None, "vLLM": None},
+    "Llama-3.1-8B BF16, TP=2": {"TRT-LLM+CG": None, "vLLM": None,
+                                "TRT compiled engine": None, "TRT compiled engine+CG": None},
+    "Llama-3.1-8B FP8,  TP=2": {"TRT-LLM+CG": None, "vLLM": None, "TRT-LLM tuned": None},
     "Qwen2.5-32B BF16,  TP=4": {"TRT-LLM+CG": None, "vLLM": None},
 }
 
@@ -40,12 +41,15 @@ def roofline(params_b, bytes_pp, n_gpu):
 def load_measured():
     import json, os
     m = {
-        "Llama-3.1-8B BF16, TP=2": ("trtllm_llama31", "vllm_llama31"),
-        "Llama-3.1-8B FP8,  TP=2": ("trtllm_llama31_fp8", "vllm_llama31_fp8"),
-        "Qwen2.5-32B BF16,  TP=4": ("trtllm_qwen25_32b", "vllm_qwen25_32b"),
+        "Llama-3.1-8B BF16, TP=2": {"TRT-LLM+CG": "trtllm_llama31", "vLLM": "vllm_llama31",
+                                    "TRT compiled engine": "trtllm_compiled_bf16",
+                                    "TRT compiled engine+CG": "trtllm_compiled_bf16_cg"},
+        "Llama-3.1-8B FP8,  TP=2": {"TRT-LLM+CG": "trtllm_llama31_fp8", "vLLM": "vllm_llama31_fp8",
+                                    "TRT-LLM tuned": "trtllm_llama31_fp8_tuned"},
+        "Qwen2.5-32B BF16,  TP=4": {"TRT-LLM+CG": "trtllm_qwen25_32b", "vLLM": "vllm_qwen25_32b"},
     }
-    for label, (tt, vt) in m.items():
-        for engine, tag in (("TRT-LLM+CG", tt), ("vLLM", vt)):
+    for label, engines in m.items():
+        for engine, tag in engines.items():
             p = f"results/{tag}-c1.json"
             if os.path.exists(p):
                 MEASURED[label][engine] = json.load(open(p))["throughput_tok_s"]

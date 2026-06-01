@@ -1,0 +1,13 @@
+{
+  "model": "Llama-3.1-8B-Instruct-FP8",
+  "concurrency": 16,
+  "requests": 128,
+  "wall_s": 6.715,
+  "throughput_tok_s": 4879.8,
+  "out_tokens_mean": 256.0,
+  "ttft_p50_s": 0.0588,
+  "ttft_p99_s": 0.0991,
+  "itl_p50_ms": 3.03,
+  "itl_p99_ms": 3.05,
+  "itl_mean_ms": 3.03
+}
