@@ -225,8 +225,9 @@ backend's `pytorch_backend_config` is ignored on this path):
 | 64 | 10,614 | 9,733 | 9,985 | 12,031 |
 | 128 | 14,194 | 14,663 | **14,802** | 19,659 |
 
-**The compiled engine and the PyTorch backend are within ~5% of each other everywhere** — and
-both trail vLLM by ~25% at c128. Two details worth quoting:
+**The compiled engine + CUDA graphs and the PyTorch backend land within ~6% of each other at
+every concurrency** (the engine *without* CUDA graphs trails the PyTorch backend by up to ~10%
+at c1) — and both trail vLLM by ~25% at c128. Two details worth quoting:
 - **CUDA graphs add only ~6% to the compiled engine at c1**, versus the **2.3×** they added to
   the PyTorch backend (162→374, FP8). TRT already fuses kernels at build time; the launch-tax
   lever moves to wherever launch overhead actually lives.
@@ -235,6 +236,8 @@ both trail vLLM by ~25% at c128. Two details worth quoting:
   TP=2 via MPI) measures **~187 tok/s at c1 through the ensemble path — ~15% below
   `trtllm-serve`** on the identical engine: the ensemble's Python pre/post-processing hop is
   not free. Production latency paths should use the BLS model or Triton's OpenAI frontend.
+  (Smoke measurement at c1 only — no formal sweep JSON committed for the Triton path; the
+  full-sweep numbers in the table above are from `trtllm-serve` on the same engine.)
 
 ![compiled engine vs PyTorch backend](results/pareto_engine.png)
 
@@ -306,8 +309,10 @@ running below ~c32 (≥2× win); it is merely neutral by c≈128.**
 Personal project for learning and benchmarking. Views and results are my own and do not represent any employer.
 
 ## Status
-**Nine measured studies complete**, all under a controlled 256-token methodology with TRT-LLM
-CUDA graphs correctly enabled and **every concurrency-1 number roofline-verified** (36–56% of
+**Nine measured studies complete** — studies 1–8 under a controlled 256-token methodology,
+study 9 (spec decode vs concurrency) under a 200-token methodology (its speedup ratios are
+internally consistent; its absolute tok/s are not directly comparable to studies 1–8) — with
+TRT-LLM CUDA graphs correctly enabled and **every concurrency-1 number roofline-verified** (36–56% of
 the TP-aggregate HBM ceiling, nothing implausible): cross-model (Llama-3.1-8B / Qwen3-8B /
 Qwen3.5-9B), FP8 and BF16 head-to-heads (Llama-3.1-8B, TP=2), big-model head-to-head
 (Qwen2.5-32B, TP=4), FP8/BF16 quantization (Qwen3-8B), **tuned-vs-tuned** (chunked prefill +

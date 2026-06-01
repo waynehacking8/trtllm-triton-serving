@@ -160,11 +160,11 @@ Same FP8 serve command as study 2, plus `enable_chunked_prefill: true` and `sche
 | 64 | 10614 | 9733 | 9985 | 12031 |
 | 128 | 14194 | 14663 | 14802 | 19659 |
 
-**Read-out: the compiled engine and the PyTorch backend land within ~5% of each other at every concurrency** (c1: 220 vs 230; c128: 14.8k vs 14.2k) — and both still trail vLLM by ~25% at c128. Two further observations: (1) CUDA graphs add only ~6% to the compiled engine at c1 (TRT already fuses kernels at build time) versus the 2.3× they added to the PyTorch backend (162→374 FP8) — the lever moves to wherever launch overhead lives. (2) The same engine served through the Triton `tensorrt_llm` backend's ensemble path measures ~187 tok/s at c1 (~15% below trtllm-serve) — the ensemble's Python pre/post-processing hop; see `scripts/setup_triton_repo.sh`.
+**Read-out: the compiled engine + CUDA graphs and the PyTorch backend land within ~6% of each other at every concurrency** (c1: 220 vs 230; c128: 14.8k vs 14.2k; the engine *without* CUDA graphs trails by up to ~10% at c1) — and both still trail vLLM by ~25% at c128. Two further observations: (1) CUDA graphs add only ~6% to the compiled engine at c1 (TRT already fuses kernels at build time) versus the 2.3× they added to the PyTorch backend (162→374 FP8) — the lever moves to wherever launch overhead lives. (2) The same engine served through the Triton `tensorrt_llm` backend's ensemble path measures ~187 tok/s at c1 (~15% below trtllm-serve) — the ensemble's Python pre/post-processing hop; see `scripts/setup_triton_repo.sh`. (Smoke measurement at c1 only; no formal sweep JSON committed for the Triton path.)
 
 ## 8. Speculative decoding under concurrency — where does the benefit end?
 
-n-gram (prompt-lookup) speculative decoding, qwen2.5-7b, extractive/RAG-style task, non-streaming (see `bench/spec_concurrency.py`). The batch=1 study showed 2.8–3.5×; this study finds where the speedup dies as concurrency rises:
+n-gram (prompt-lookup) speculative decoding, qwen2.5-7b, extractive/RAG-style task, non-streaming (see `bench/spec_concurrency.py`). Note: this study uses **200-token decodes** (not the 256-token methodology of studies 1–7) — the speedup ratios are internally consistent (same budget in numerator and denominator), but the absolute tok/s are not directly comparable to other studies. The batch=1 study showed 2.8–3.5×; this study finds where the speedup dies as concurrency rises:
 
 | concurrency | baseline tok/s | ngram tok/s | speedup | draft acceptance |
 |---|---|---|---|---|
