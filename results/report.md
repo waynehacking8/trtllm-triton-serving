@@ -16,7 +16,7 @@ The 9B carries ~25% less throughput/H100 than the 8Bs — the capability-vs-cost
 
 ## 2. Head-to-head FP8 — Llama-3.1-8B, TP=2 (headline)
 
-Same model & precision (FP8, `nvidia/Llama-3.1-8B-Instruct-FP8`), TRT-LLM compiled engine + CUDA graphs vs vLLM. **TRT-LLM wins the low/mid-concurrency (latency) regime; vLLM wins high concurrency (throughput).** This is the textbook split and only appears once CUDA graphs are correctly on.
+Same model & precision (FP8, `nvidia/Llama-3.1-8B-Instruct-FP8`), TRT-LLM's PyTorch backend + CUDA graphs (`--backend pytorch`, *not* a pre-compiled TRT engine — a compiled-engine comparison is future work) vs vLLM. **TRT-LLM wins the low/mid-concurrency (latency) regime; vLLM wins high concurrency (throughput).** This is the textbook split and only appears once CUDA graphs are correctly on.
 
 **TensorRT-LLM+CG** (`trtllm_llama31_fp8`)
 

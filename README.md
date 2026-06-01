@@ -1,11 +1,13 @@
 # TensorRT-LLM + Triton Multi-GPU Serving
 
-Production-style LLM serving on the NVIDIA-native stack — **TensorRT-LLM** engines
+Production-style LLM serving on the NVIDIA-native stack — **TensorRT-LLM**
 tensor-parallel across **H100 (NVLink)**, benchmarked head-to-head against **vLLM**, plus a
-cross-model and a quantization study. The measured runs use TensorRT-LLM's own OpenAI server
-(`trtllm-serve`); a **Triton + `tensorrt_llm`-backend** deployment template
-(`triton_model_repo/`) is included as the production path (not yet exercised in the
-benchmark — see Status).
+cross-model and a quantization study. The measured TRT-LLM runs use TensorRT-LLM's own OpenAI
+server (`trtllm-serve`) on its **PyTorch backend with CUDA graphs** (`--backend pytorch`,
+`pytorch_backend_config.use_cuda_graph`), tensor-parallel **TP=2 for Llama-3.1-8B and TP=4 for
+Qwen2.5-32B** — *not* a pre-compiled TRT engine; a compiled-engine comparison is future work
+(see Status). A **Triton + `tensorrt_llm`-backend** deployment template (`triton_model_repo/`)
+is included as the production path (not yet exercised in the benchmark — see Status).
 
 The repo prioritizes a reproducible **serve → benchmark** loop, with a **controlled
 methodology** (every request decodes exactly 256 tokens via `ignore_eos`, so
@@ -22,7 +24,8 @@ throughput/latency compare the same work across stacks).
 - Not multi-node — single 4×H100 box over NVLink. Multi-node (NCCL over InfiniBand) is in the roadmap.
 
 ## Hardware
-- 4× NVIDIA H100 80GB, NVLink. Tensor parallel = 4.
+- 4× NVIDIA H100 80GB, NVLink. Tensor parallel sized per model: **TP=2** for the 8B head-to-heads,
+  **TP=4** for Qwen2.5-32B.
 - Driver + CUDA per the TensorRT-LLM container (see `docs/design-decisions.md`).
 
 ## Layout
@@ -61,13 +64,17 @@ The first version of this benchmark showed TRT-LLM ~2× *slower* than vLLM every
 its FP8 engine. That's implausible for NVIDIA's own engine, so instead of publishing it I ran
 a **memory-bandwidth roofline check** (`bench/roofline_check.py`): single-stream decode is
 bandwidth-bound, so `tok/s_max ≈ HBM_BW × n_gpu / weight_bytes`. The TRT-LLM FP8 number was
-**162 tok/s = ~19 % of roofline** — physically impossible for a compiled engine. Root cause:
+**162 tok/s = ~19 % of roofline** — physically implausible for NVIDIA's own kernels. Root cause:
 **CUDA graphs were silently OFF.** `trtllm-serve`'s `--extra_llm_api_options` maps to the LLM
 API, where the key must be nested under `pytorch_backend_config.use_cuda_graph` — my first two
 YAML schemas (`use_cuda_graph` flat, then 1.0's `cuda_graph_config`) were accepted but
 ignored; the startup log still read `use_cuda_graph=False`. With the correct nesting the same
-config jumped to **374 tok/s = ~89 % of the 1-GPU roofline**, and the whole conclusion flipped.
-Lesson: a result that beats physics in the wrong direction is a config bug, not a finding.
+config jumped to **374 tok/s = ~89 % of the *single-GPU* memory-bandwidth roofline** (≈419
+tok/s for 8 GB of FP8 weights against one H100's ~3.35 TB/s HBM). Because the model is split
+TP=2, the *aggregate* two-GPU ceiling is ~838 tok/s, so the same 374 tok/s is **~45 % of the
+TP=2 aggregate ceiling** — see *Verification* for why both denominators matter. Either way the
+whole conclusion flipped. Lesson: a result that beats physics in the wrong direction is a
+config bug, not a finding.
 
 ### 1. Cross-model — vLLM, TP=1, BF16 (1× H100 each)
 
@@ -82,8 +89,9 @@ The 9B carries ~25 % less throughput/H100 than the 8Bs — capability-vs-cost, w
 
 ### 2. Head-to-head, **FP8** — Llama-3.1-8B, TP=2 (the headline)
 
-Same model & precision (`nvidia/Llama-3.1-8B-Instruct-FP8`), TRT-LLM compiled engine **+ CUDA
-graphs** vs vLLM:
+Same model & precision (`nvidia/Llama-3.1-8B-Instruct-FP8`), TRT-LLM's **PyTorch backend + CUDA
+graphs** (`--backend pytorch`, *not* a pre-compiled TRT engine — a compiled-engine comparison
+is future work) vs vLLM:
 
 | concurrency | TRT-LLM+CG tok/s | vLLM tok/s | ratio | winner |
 |---|---|---|---|---|
@@ -149,8 +157,13 @@ free-form generation where it isn't. An SA picks it per workload, not as a blank
 
 ### Verification & cross-validation
 
-- **Roofline** (`bench/roofline_check.py`): all corrected c1 numbers land at **36–56 %** of the
-  HBM-bandwidth ceiling — the realistic band; nothing implausibly low (the bug was at 19 %).
+- **Roofline** (`bench/roofline_check.py`): all corrected c1 numbers land at **36–56 % of the
+  *TP-aggregate* HBM-bandwidth ceiling** (weights split across all TP GPUs, so per-token traffic
+  per GPU halves at TP=2 → the aggregate ceiling roughly doubles to ~838 tok/s for Llama-3.1-8B
+  FP8) — the realistic band; nothing implausibly low (the bug was at 19 %). The two denominators
+  are the same physics from different sides: the headline **374 tok/s = ~89 % of the single-GPU
+  roofline (≈419 tok/s) = ~45 % of the TP=2 aggregate ceiling (≈838 tok/s)**, and 45 % sits
+  inside that 36–56 % band.
 - **Published data**: NVIDIA's perf-overview lists Llama-3.1-8B-FP8/H100 max throughput in the
   ~26k tok/s range (high batch) — same order as the high-concurrency numbers here; community
   benchmarks (LMSYS, SqueezeBits) report "TRT-LLM highest, vLLM second," consistent with the
@@ -176,7 +189,9 @@ CUDA graphs correctly enabled and **every number roofline-verified**: cross-mode
 big-model head-to-head (Qwen2.5-32B, TP=4), and FP8/BF16 quantization (Qwen3-8B). Headline:
 **TRT-LLM+CUDA-graph wins low/mid concurrency (latency), vLLM wins high concurrency
 (throughput)** — and the journey there (catching a silent CUDA-graph mis-config via a physics
-check) is the point. Remaining (roadmap): the full Triton `tensorrt_llm`-backend
-(`triton_model_repo/`) in place of `trtllm-serve`, and an FP8 KV-cache / speculative-decoding
-study. Note: TRT-LLM 0.20's compiled-engine path supports Llama-3.x / Qwen2.x; Qwen3 / Llama-4
-run on its PyTorch backend or vLLM.
+check) is the point. **All measured TRT-LLM runs use the PyTorch backend with CUDA graphs
+(`--backend pytorch`), not a pre-compiled TRT engine.** Remaining (roadmap): a **compiled-engine
+vs PyTorch-backend** head-to-head, the full Triton `tensorrt_llm`-backend (`triton_model_repo/`)
+in place of `trtllm-serve`, and an FP8 KV-cache / speculative-decoding study. Note: TRT-LLM
+0.20's compiled-engine path supports Llama-3.x / Qwen2.x; Qwen3 / Llama-4 run on its PyTorch
+backend or vLLM.
