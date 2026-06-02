@@ -1,0 +1,13 @@
+{
+  "model": "/home/wayne/bw-runs/trtllm-triton-serving/checkpoints/Llama-3.1-8B-Instruct-NVFP4",
+  "concurrency": 64,
+  "requests": 512,
+  "wall_s": 16.51,
+  "throughput_tok_s": 7938.5,
+  "out_tokens_mean": 256.0,
+  "ttft_p50_s": 0.1127,
+  "ttft_p99_s": 0.1416,
+  "itl_p50_ms": 7.64,
+  "itl_p99_ms": 7.77,
+  "itl_mean_ms": 7.63
+}

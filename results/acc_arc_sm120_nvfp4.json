@@ -1,0 +1,9 @@
+{
+  "dataset": "ai2_arc/ARC-Challenge[test]",
+  "method": "generation-based MC (letter match), temperature 0",
+  "n": 300,
+  "correct": 240,
+  "unparsed": 1,
+  "accuracy": 0.8,
+  "model": "/home/wayne/bw-runs/trtllm-triton-serving/checkpoints/Llama-3.1-8B-Instruct-NVFP4"
+}

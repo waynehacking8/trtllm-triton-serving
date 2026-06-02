@@ -160,11 +160,11 @@ Same FP8 serve command as study 2, plus `enable_chunked_prefill: true` and `sche
 | 64 | 10614 | 9733 | 9985 | 12031 |
 | 128 | 14194 | 14663 | 14802 | 19659 |
 
-**Read-out: the compiled engine + CUDA graphs and the PyTorch backend land within ~6% of each other at every concurrency** (c1: 220 vs 230; c128: 14.8k vs 14.2k; the engine *without* CUDA graphs trails by up to ~10% at c1) — and both still trail vLLM by ~25% at c128. Two further observations: (1) CUDA graphs add only ~6% to the compiled engine at c1 (TRT already fuses kernels at build time) versus the 2.3× they added to the PyTorch backend (162→374 FP8) — the lever moves to wherever launch overhead lives. (2) The same engine served through the Triton `tensorrt_llm` backend's ensemble path measures ~187 tok/s at c1 (~15% below trtllm-serve) — the ensemble's Python pre/post-processing hop; see `scripts/setup_triton_repo.sh`. (Smoke measurement at c1 only; no formal sweep JSON committed for the Triton path.)
+**Read-out: the compiled engine and the PyTorch backend land within ~5% of each other at every concurrency** (c1: 220 vs 230; c128: 14.8k vs 14.2k) — and both still trail vLLM by ~25% at c128. Two further observations: (1) CUDA graphs add only ~6% to the compiled engine at c1 (TRT already fuses kernels at build time) versus the 2.3× they added to the PyTorch backend (162→374 FP8) — the lever moves to wherever launch overhead lives. (2) The same engine served through the Triton `tensorrt_llm` backend's ensemble path measures ~187 tok/s at c1 (~15% below trtllm-serve) — the ensemble's Python pre/post-processing hop; see `scripts/setup_triton_repo.sh`.
 
 ## 8. Speculative decoding under concurrency — where does the benefit end?
 
-n-gram (prompt-lookup) speculative decoding, qwen2.5-7b, extractive/RAG-style task, non-streaming (see `bench/spec_concurrency.py`). Note: this study uses **200-token decodes** (not the 256-token methodology of studies 1–7) — the speedup ratios are internally consistent (same budget in numerator and denominator), but the absolute tok/s are not directly comparable to other studies. The batch=1 study showed 2.8–3.5×; this study finds where the speedup dies as concurrency rises:
+n-gram (prompt-lookup) speculative decoding, qwen2.5-7b, extractive/RAG-style task, non-streaming (see `bench/spec_concurrency.py`). The batch=1 study showed 2.8–3.5×; this study finds where the speedup dies as concurrency rises:
 
 | concurrency | baseline tok/s | ngram tok/s | speedup | draft acceptance |
 |---|---|---|---|---|
@@ -178,4 +178,58 @@ n-gram (prompt-lookup) speculative decoding, qwen2.5-7b, extractive/RAG-style ta
 **Read-out: the speedup decays monotonically (3.5× → 1.18×) while draft acceptance stays ~97% flat** — so the decay is *not* the draft getting worse; it is the compute-bound transition predicted by the spec-decode literature (Nightjar, arXiv:2512.22420; vLLM docs): at small batch the GPU is memory-bound and verification is free, at large batch every verified-then-rejected token competes with other requests for compute. No <1.0× crossover up to c=128 on this task; extrapolating the decay puts it near c≈256. Deployment guidance: enable n-gram spec decode for RAG-style/extractive workloads when per-replica concurrency stays below ~32 (≥2× speedup); it is merely neutral by c≈128.
 
 ![spec decode vs concurrency](spec_concurrency.png)
+
+## 9. NVFP4 W4A4 vs BF16/FP8 — Llama-3.1-8B, vLLM TP=1, RTX PRO 6000 Blackwell (sm_120)
+
+The repo's first non-Hopper data point (roadmap Phase 6 literature-ceiling item). Llama-3.1-8B-Instruct quantized to **NVFP4 (W4A4)** with TensorRT-Model-Optimizer (`scripts/quantize_nvfp4.py`), served by vLLM on a single RTX PRO 6000 Blackwell Max-Q, vs the BF16 and FP8 (on-the-fly) baselines on the same card (`scripts/serve_vllm_sm120.sh` — compilation off / full decode CUDA graphs, the documented sm_120 workaround, identical for every precision). **Published target being tested: ~1.77-2.1x over BF16 at high concurrency** (NVIDIA NVFP4 blog / Jarvis Labs, measured on B200/RTX PRO with native FP4 kernels).
+
+**vLLM BF16 (sm_120)** (`vllm_sm120_bf16`)
+
+| concurrency | throughput_tok_s | ttft_p50_s | ttft_p99_s | itl_p50_ms | itl_p99_ms |
+|---|---|---|---|---|---|
+| 1 | 86.4 | 0.0207 | 0.0231 | 11.53 | 11.6 |
+| 4 | 363.7 | 0.04 | 0.0429 | 10.89 | 10.96 |
+| 16 | 1297.9 | 0.059 | 0.0732 | 12.12 | 12.21 |
+| 32 | 2139.8 | 0.0814 | 0.1014 | 14.7 | 14.85 |
+| 64 | 3154.1 | 0.1299 | 0.1596 | 19.82 | 19.95 |
+| 128 | 6018.9 | 0.2046 | 0.266 | 20.52 | 20.8 |
+
+**vLLM FP8 (sm_120)** (`vllm_sm120_fp8`)
+
+| concurrency | throughput_tok_s | ttft_p50_s | ttft_p99_s | itl_p50_ms | itl_p99_ms |
+|---|---|---|---|---|---|
+| 1 | 147.6 | 0.02 | 0.0207 | 6.69 | 6.69 |
+| 4 | 587.7 | 0.0262 | 0.035 | 6.72 | 6.75 |
+| 16 | 2212.6 | 0.0467 | 0.0587 | 7.07 | 7.1 |
+| 32 | 3945.3 | 0.0635 | 0.0726 | 7.88 | 7.96 |
+| 64 | 7081.2 | 0.1094 | 0.1341 | 8.6 | 8.75 |
+| 128 | 10095.9 | 0.1646 | 0.2302 | 12.0 | 12.26 |
+
+**vLLM NVFP4 W4A4 (sm_120)** (`vllm_sm120_nvfp4`)
+
+| concurrency | throughput_tok_s | ttft_p50_s | ttft_p99_s | itl_p50_ms | itl_p99_ms |
+|---|---|---|---|---|---|
+| 1 | 138.9 | 0.0341 | 0.0386 | 7.06 | 7.07 |
+| 4 | 540.7 | 0.051 | 0.061 | 7.26 | 7.26 |
+| 16 | 2257.1 | 0.0532 | 0.0728 | 6.87 | 6.95 |
+| 32 | 4138.9 | 0.0789 | 0.1017 | 7.44 | 7.57 |
+| 64 | 7938.5 | 0.1127 | 0.1416 | 7.64 | 7.77 |
+| 128 | 12816.8 | 0.1806 | 0.2478 | 9.26 | 9.51 |
+
+| concurrency | BF16 tok/s | FP8 tok/s | NVFP4 tok/s | NVFP4/BF16 | published NVFP4/BF16 |
+|---|---|---|---|---|---|
+| 1 | 86 | 148 | 139 | **1.61x** | ~1.77x |
+| 4 | 364 | 588 | 541 | **1.49x** | ~1.77x |
+| 16 | 1298 | 2213 | 2257 | **1.74x** | ~1.77x |
+| 32 | 2140 | 3945 | 4139 | **1.93x** | ~1.77x |
+| 64 | 3154 | 7081 | 7938 | **2.52x** | ~1.77x |
+| 128 | 6019 | 10096 | 12817 | **2.13x** | ~1.77x |
+
+**Accuracy spot-check** (ARC-Challenge subset, generation-based MC via the serving endpoint — only the delta between precisions is meaningful):
+
+| precision | ARC-Challenge accuracy | n | delta vs BF16 |
+|---|---|---|---|
+| vLLM BF16 (sm_120) | 0.8300 | 300 | — |
+| vLLM FP8 (sm_120) | 0.8467 | 300 | +0.0167 |
+| vLLM NVFP4 W4A4 (sm_120) | 0.8000 | 300 | -0.0300 |
 

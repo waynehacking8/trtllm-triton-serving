@@ -1,0 +1,13 @@
+{
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "concurrency": 16,
+  "requests": 128,
+  "wall_s": 25.248,
+  "throughput_tok_s": 1297.9,
+  "out_tokens_mean": 256.0,
+  "ttft_p50_s": 0.059,
+  "ttft_p99_s": 0.0732,
+  "itl_p50_ms": 12.12,
+  "itl_p99_ms": 12.21,
+  "itl_mean_ms": 12.13
+}

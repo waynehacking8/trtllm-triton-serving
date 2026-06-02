@@ -1,0 +1,9 @@
+{
+  "dataset": "ai2_arc/ARC-Challenge[test]",
+  "method": "generation-based MC (letter match), temperature 0",
+  "n": 300,
+  "correct": 254,
+  "unparsed": 0,
+  "accuracy": 0.8467,
+  "model": "meta-llama/Llama-3.1-8B-Instruct"
+}

@@ -1,0 +1,38 @@
+# Measurement environment — sm_120 NVFP4 serving study
+# Generated: 2026-06-02
+
+## Hardware
+name, compute_cap, memory.total [MiB], power.limit [W], driver_version
+NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition, 12.0, 97887 MiB, 300.00 W, 580.159.03
+
+## Software stack
+python: Python 3.10.12
+compressed-tensors                       0.13.0
+flashinfer-python                        0.6.6
+llmcompressor                            0.10.0.2
+nvidia-modelopt                          0.44.0
+torch                                    2.10.0           3
+transformers                             4.57.6
+vllm                                     0.18.0
+
+## Serving config (identical for all precisions — scripts/serve_vllm_sm120.sh)
+TP=1, gpu_memory_utilization=0.70, max_model_len=4096
+compilation-config: mode=NONE, cudagraph_mode=FULL (-> FULL_DECODE_ONLY with FlashAttention backend)
+Reason: vLLM 0.18 + torch 2.10 torch.compile crashes (FakeTensorMode AttributeError);
+        this workaround keeps decode CUDA graphs, unlike --enforce-eager.
+
+## Known measurement conditions
+- Card is Max-Q (300 W power limit); absolute tok/s lower than 600 W variants.
+- An idle root-owned process (node, 11.2 GB, 0% util) was resident on the GPU during all runs;
+  identical condition for every precision, no compute interference observed.
+
+## BF16 sweep clock/power summary (1-2 Hz sampling during sweep)
+under-load samples=151 avg_sm_clock=1836 MHz max_sm_clock=2332 MHz peak_power=301.6 W peak_temp=88 C
+
+## FP8 + NVFP4 sweeps clock/power summary (1-2 Hz sampling during sweeps)
+under-load samples=131 avg_sm_clock=2053 MHz max_sm_clock=2332 MHz peak_power=303.7 W peak_temp=88 C
+(The 300 W Max-Q power cap is reached during serving — same condition for every precision.)
+
+## NVFP4 GEMM backend (from vLLM startup log — the key kernel-path evidence)
+INFO [nvfp4_utils.py:85] Using NvFp4LinearBackend.FLASHINFER_CUTLASS for NVFP4 GEMM
+(native FP4 path via flashinfer 0.6.6 CUTLASS kernels — NOT the Marlin dequant fallback)
