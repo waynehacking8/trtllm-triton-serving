@@ -27,6 +27,7 @@ LABEL = {
     "trtllm_compiled_bf16_cg": "TRT-LLM compiled engine + CUDA graphs",
     "vllm_sm120_bf16": "vLLM BF16 (sm_120)", "vllm_sm120_fp8": "vLLM FP8 (sm_120)",
     "vllm_sm120_nvfp4": "vLLM NVFP4 W4A4 (sm_120)",
+    "trtllm_triton_bf16": "Triton ensemble (tensorrt_llm backend)",
 }
 GROUP_A = ["xm_qwen3_8b", "xm_qwen35_9b", "xm_llama31_8b"]
 GROUP_B = ["trtllm_llama31", "vllm_llama31"]
@@ -36,6 +37,8 @@ GROUP_C = ["vllm_bf16", "vllm_fp8"]
 GROUP_TUNED = ["trtllm_llama31_fp8", "trtllm_llama31_fp8_tuned", "vllm_llama31_fp8"]
 GROUP_ENGINE = ["trtllm_llama31", "trtllm_compiled_bf16", "trtllm_compiled_bf16_cg", "vllm_llama31"]
 GROUP_SM120 = ["vllm_sm120_bf16", "vllm_sm120_fp8", "vllm_sm120_nvfp4"]
+# Triton ensemble vs the same compiled engine through trtllm-serve (study 12)
+GROUP_TRITON = ["trtllm_triton_bf16", "trtllm_compiled_bf16", "trtllm_compiled_bf16_cg"]
 # accuracy spot-check JSONs (bench/accuracy_mc.py) paired with the sm_120 sweep tags
 ACC_SM120 = {"vllm_sm120_bf16": "results/acc_arc_sm120_bf16.json",
              "vllm_sm120_fp8": "results/acc_arc_sm120_fp8.json",
@@ -278,6 +281,40 @@ def main():
                     w(f"| {LABEL[t]} | {a['accuracy']:.4f} | {a['n']} | {d} |")
             w("")
 
+    if "trtllm_triton_bf16" in runs:
+        w("## 10. Triton ensemble path under concurrency — where the Python hop stops being free\n")
+        w("The same compiled BF16 engine as section 7, deployed behind Triton's `tensorrt_llm` "
+          "backend (ensemble: preprocessing -> tensorrt_llm -> postprocessing, "
+          "`scripts/setup_triton_repo.sh`), swept c1->c128 with `bench/bench_triton.py` "
+          "(Triton generate_stream protocol, same forced-256-token methodology as every other "
+          "sweep). Baselines: the same engine through `trtllm-serve` (section 7).\n")
+        cols = {"trtllm_triton_bf16": "Triton ensemble",
+                "trtllm_compiled_bf16": "trtllm-serve (no CG)",
+                "trtllm_compiled_bf16_cg": "trtllm-serve + CG"}
+        present = [t for t in cols if t in runs]
+        cs = sorted({r["concurrency"] for t in present for r in runs[t]})
+        w("| concurrency | " + " | ".join(cols[t] for t in present) + " | ensemble vs no-CG serve |")
+        w("|---|" + "---|" * (len(present) + 1))
+        tri = {r["concurrency"]: r["throughput_tok_s"] for r in runs["trtllm_triton_bf16"]}
+        nocg = {r["concurrency"]: r["throughput_tok_s"] for r in runs.get("trtllm_compiled_bf16", [])}
+        for c in cs:
+            vals = []
+            for t in present:
+                byc = {r["concurrency"]: r["throughput_tok_s"] for r in runs[t]}
+                vals.append(f"{byc[c]:,.0f}" if c in byc else "—")
+            delta = (f"{(tri[c] / nocg[c] - 1) * 100:+.1f}%" if c in tri and c in nocg else "—")
+            w(f"| {c} | " + " | ".join(vals) + f" | {delta} |")
+        w("")
+        w("**Read-out: the ensemble's Python pre/post hop is FREE until c32 (0±1% vs the "
+          "identical executor through trtllm-serve), then becomes THE bottleneck** — at c64 it "
+          "costs ~10%, and at c128 the ensemble *regresses in absolute terms* (its throughput "
+          "falls while the engine underneath keeps scaling) with TTFT p99 exploding to ~6 s "
+          "while ITL stays <9 ms: requests queue at the single-instance Python preprocessing "
+          "stage (`preprocessing_instance_count: 1`), not in the engine. This also revises "
+          "study 8's c1 smoke estimate: against the same executor without CUDA graphs, the "
+          "c1 ensemble overhead is ~0%, not ~15% — the 15% was mostly trtllm-serve's "
+          "CUDA-graph advantage, which the C++ tensorrt_llm backend doesn't have.\n")
+
     os.makedirs("results", exist_ok=True)
     open("results/report.md", "w").write("\n".join(L) + "\n")
     print("wrote results/report.md")
@@ -289,6 +326,8 @@ def main():
     _plot(runs, GROUP_ENGINE, "pareto_engine.png", "Compiled engine vs PyTorch backend — BF16 TP=2")
     _plot(runs, GROUP_SM120, "pareto_sm120.png",
           "NVFP4 W4A4 vs BF16/FP8 — Llama-3.1-8B, RTX PRO 6000 (sm_120)")
+    _plot(runs, GROUP_TRITON, "pareto_triton.png",
+          "Triton ensemble vs trtllm-serve — same compiled BF16 engine, TP=2")
 
 
 def _plot(runs, tags, fname, title):

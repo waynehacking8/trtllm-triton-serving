@@ -1,0 +1,13 @@
+{
+  "model": "ensemble",
+  "concurrency": 64,
+  "requests": 512,
+  "wall_s": 15.048,
+  "throughput_tok_s": 8710.1,
+  "out_tokens_mean": 256.0,
+  "ttft_p50_s": 0.0383,
+  "ttft_p99_s": 1.3032,
+  "itl_p50_ms": 6.59,
+  "itl_p99_ms": 6.73,
+  "itl_mean_ms": 6.51
+}

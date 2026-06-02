@@ -83,7 +83,17 @@ answers, the exact method, and how to read the result.
   - **Read-out:** plot speedup vs concurrency; find the ≤1.0× crossover → complete usage
     guidance: "enable spec decode for RAG-style workloads below concurrency X, disable above".
 
-- [ ] **Triton ensemble path: full concurrency sweep** (currently c1 smoke only, ~187 tok/s).
+- [x] **Triton ensemble path: full concurrency sweep** (currently c1 smoke only, ~187 tok/s).
+  **DONE — README study 12 / report section 10 / `bench/bench_triton.py` /
+  `results/trtllm_triton_bf16-c*.json` / `results/pareto_triton.png`.** Result: the roadmap's
+  either/or question gets a both-with-a-boundary answer. **c1–c32: the Python hop fully
+  amortizes (0±1% vs the same executor through trtllm-serve)** — and this revises study 8's
+  smoke estimate: the "~15% c1 overhead" was trtllm-serve's CUDA-graph advantage, not ensemble
+  cost. **c64+: the hop serializes catastrophically** — at c128 the ensemble regresses in
+  absolute terms (8,710 → 5,769 tok/s) while the engine underneath scales to 14.7k; TTFT p99
+  6.0 s with ITL still 8.9 ms = queueing at single-instance Python preprocessing
+  (`preprocessing_instance_count: 1`), not in the engine. Guidance: ensemble OK ≤c32;
+  throughput serving needs more preprocessing instances, BLS, or trtllm-serve.
   - **Question:** the ~15% ensemble overhead vs `trtllm-serve` was measured at c1 only. Under
     concurrency, does the Python pre/post-processing hop amortize (fixed cost spread over more
     requests) or become the bottleneck (GIL / single-instance preprocessing serializes)?

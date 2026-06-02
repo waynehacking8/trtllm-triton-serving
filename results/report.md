@@ -233,3 +233,18 @@ The repo's first non-Hopper data point (roadmap Phase 6 literature-ceiling item)
 | vLLM FP8 (sm_120) | 0.8467 | 300 | +0.0167 |
 | vLLM NVFP4 W4A4 (sm_120) | 0.8000 | 300 | -0.0300 |
 
+## 10. Triton ensemble path under concurrency — where the Python hop stops being free
+
+The same compiled BF16 engine as section 7, deployed behind Triton's `tensorrt_llm` backend (ensemble: preprocessing -> tensorrt_llm -> postprocessing, `scripts/setup_triton_repo.sh`), swept c1->c128 with `bench/bench_triton.py` (Triton generate_stream protocol, same forced-256-token methodology as every other sweep). Baselines: the same engine through `trtllm-serve` (section 7).
+
+| concurrency | Triton ensemble | trtllm-serve (no CG) | trtllm-serve + CG | ensemble vs no-CG serve |
+|---|---|---|---|---|
+| 1 | 206 | 207 | 220 | -0.6% |
+| 4 | 807 | 814 | 889 | -0.8% |
+| 16 | 2,951 | 2,954 | 3,152 | -0.1% |
+| 32 | 5,450 | 5,443 | 5,640 | +0.1% |
+| 64 | 8,710 | 9,733 | 9,985 | -10.5% |
+| 128 | 5,769 | 14,663 | 14,802 | -60.7% |
+
+**Read-out: the ensemble's Python pre/post hop is FREE until c32 (0±1% vs the identical executor through trtllm-serve), then becomes THE bottleneck** — at c64 it costs ~10%, and at c128 the ensemble *regresses in absolute terms* (its throughput falls while the engine underneath keeps scaling) with TTFT p99 exploding to ~6 s while ITL stays <9 ms: requests queue at the single-instance Python preprocessing stage (`preprocessing_instance_count: 1`), not in the engine. This also revises study 8's c1 smoke estimate: against the same executor without CUDA graphs, the c1 ensemble overhead is ~0%, not ~15% — the 15% was mostly trtllm-serve's CUDA-graph advantage, which the C++ tensorrt_llm backend doesn't have.
+

@@ -238,11 +238,12 @@ at c1) — and both trail vLLM by ~25% at c128. Two details worth quoting:
   lever moves to wherever launch overhead actually lives.
 - The same engine deployed behind **Triton's `tensorrt_llm` backend** (full ensemble repo:
   preprocessing → tensorrt_llm → postprocessing + BLS, `scripts/setup_triton_repo.sh`,
-  TP=2 via MPI) measures **~187 tok/s at c1 through the ensemble path — ~15% below
-  `trtllm-serve`** on the identical engine: the ensemble's Python pre/post-processing hop is
-  not free. Production latency paths should use the BLS model or Triton's OpenAI frontend.
-  (Smoke measurement at c1 only — no formal sweep JSON committed for the Triton path; the
-  full-sweep numbers in the table above are from `trtllm-serve` on the same engine.)
+  TP=2 via MPI). The original c1 smoke estimate (~187 tok/s, "~15% below trtllm-serve") is
+  **revised by the full sweep in study 12**: measured with the same forced-256-token
+  methodology, the c1 ensemble overhead vs the same executor without CUDA graphs is **~0%** —
+  the 15% was trtllm-serve's CUDA-graph advantage, not the ensemble hop. What the full sweep
+  finds instead is much more interesting: the ensemble collapses at high concurrency
+  (study 12).
 
 ![compiled engine vs PyTorch backend](results/pareto_engine.png)
 
@@ -366,6 +367,45 @@ and `trtllm-bench --tp 2` **crashes at executor init** (rank-1 illegal memory ac
 reproducible across GPU pairs and IPC settings — `results/waterfall/W4_tp2.txt`), which is
 why the TP step is measured on the serving side (W5→W6) where TP=2 works fine.
 
+### 12. Triton ensemble under concurrency — where the Python hop stops being free
+
+Study 8 deployed the compiled engine behind Triton's `tensorrt_llm` backend but only smoke-
+tested it at c1. This closes the roadmap's last open item: the full c1→c128 sweep through the
+ensemble (preprocessing → tensorrt_llm → postprocessing), measured by `bench/bench_triton.py`
+(Triton `generate_stream` protocol, same forced-256-token methodology as every other study),
+against the same engine through `trtllm-serve`:
+
+| concurrency | Triton ensemble | trtllm-serve (no CG) | trtllm-serve + CG | ensemble vs no-CG |
+|---|---|---|---|---|
+| 1 | 206 | 207 | 220 | **−0.6%** |
+| 4 | 807 | 814 | 889 | −0.8% |
+| 16 | 2,951 | 2,954 | 3,152 | −0.1% |
+| 32 | 5,450 | 5,443 | 5,640 | **+0.1%** |
+| 64 | 8,710 | 9,733 | 9,985 | −10.5% |
+| 128 | **5,769** | 14,663 | 14,802 | **−60.7%** |
+
+![Triton ensemble vs trtllm-serve](results/pareto_triton.png)
+
+The roadmap asked: *does the Python pre/post hop amortize under concurrency, or serialize?*
+The answer is **both, with a sharp boundary at ~c32**:
+
+1. **c1–c32: the ensemble is free.** 0±1% vs the identical executor through `trtllm-serve` —
+   the Python hop fully amortizes. (This also revises study 8's "~15% c1 overhead": against
+   the no-CUDA-graph baseline the overhead is ~0%; the 15% was the CUDA-graph advantage of
+   `trtllm-serve`'s comparison point, which the C++ `tensorrt_llm` backend lacks.)
+2. **c64+: the ensemble becomes the bottleneck — catastrophically.** At c128 its throughput
+   *regresses in absolute terms* (8,710 → 5,769 tok/s going from c64 to c128) while the same
+   engine through `trtllm-serve` keeps scaling to 14.7k. The signature is unambiguous:
+   TTFT p99 explodes to **6.0 s** while ITL stays at **8.9 ms** — requests are queueing at the
+   single-instance Python preprocessing stage (`preprocessing_instance_count: 1` in the
+   template), not in the engine.
+
+Deployment guidance this buys: the Python ensemble is fine for latency-oriented replicas
+(≤c32); throughput-oriented serving must either raise `preprocessing_instance_count`
+(more Python processes), use the BLS path, or bypass Triton's Python stages entirely
+(`trtllm-serve` / the C++ frontend). This is the measured version of why production
+deployments avoid the default ensemble at scale.
+
 ### Verification & cross-validation
 
 - **Roofline** (`bench/roofline_check.py`): all corrected c1 numbers land at **36–56 % of the
@@ -409,11 +449,12 @@ why the TP step is measured on the serving side (W5→W6) where TP=2 works fine.
 Personal project for learning and benchmarking. Views and results are my own and do not represent any employer.
 
 ## Status
-**Eleven measured studies complete** — studies 1–8 under a controlled 256-token methodology,
+**Twelve measured studies complete** — studies 1–8 under a controlled 256-token methodology,
 study 9 (spec decode vs concurrency) under a 200-token methodology (its speedup ratios are
 internally consistent; its absolute tok/s are not directly comparable to studies 1–8),
-study 10 (NVFP4, 256-token methodology on sm_120), and study 11 (the published-number
-waterfall) under NVIDIA's own `trtllm-bench` methodology — with
+study 10 (NVFP4, 256-token methodology on sm_120), study 11 (the published-number
+waterfall) under NVIDIA's own `trtllm-bench` methodology, and study 12 (Triton ensemble
+sweep, 256-token methodology over the Triton protocol) — with
 TRT-LLM CUDA graphs correctly enabled and **every concurrency-1 number roofline-verified** (36–56% of
 the TP-aggregate HBM ceiling, nothing implausible): cross-model (Llama-3.1-8B / Qwen3-8B /
 Qwen3.5-9B), FP8 and BF16 head-to-heads (Llama-3.1-8B, TP=2), big-model head-to-head
@@ -422,7 +463,9 @@ Qwen3.5-9B), FP8 and BF16 head-to-heads (Llama-3.1-8B, TP=2), big-model head-to-
 deployment, deployed and measured), batch=1 speculative decoding, **speculative decoding
 under concurrency**, **NVFP4 W4A4 serving on RTX PRO 6000 Blackwell** (the published
 ~1.77× over BF16 reproduced at 2.13–2.52×, native FLASHINFER_CUTLASS FP4 kernels, accuracy
-spot-checked), and the **published-ceiling reproduction + waterfall attribution**.
+spot-checked), the **published-ceiling reproduction + waterfall attribution**, and the
+**Triton ensemble concurrency sweep** (the Python hop is free to c32, then collapses —
+−61% at c128 with 6 s TTFT p99 from single-instance preprocessing).
 
 Headline: **TRT-LLM+CUDA-graph wins low/mid concurrency (latency) — FP8 c1 374 vs 300 tok/s;
 vLLM wins high concurrency (throughput) — c128 22.8k vs 13.8k.** The high-concurrency deficit
