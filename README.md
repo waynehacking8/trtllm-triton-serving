@@ -322,6 +322,50 @@ published ~1.77–2.1×). Reading the sweep:
   number in the table — its ITL jumps to c128 levels; treating c128 as the high-concurrency
   read-out, the conclusion is unchanged.
 
+### 11. NVIDIA's 26,401/27,688 tok/s — reproduced, then attributed knob-by-knob down to ours
+
+Every study above leaves one elephant standing: NVIDIA's perf-overview lists **27,688 tok/s**
+(release/0.20 docs; 26,401 in the current docs) for this exact model on one H100, while this
+repo's best serving number is 13,828 — "we reach 53% of the published ceiling" was the honest
+caveat. This study replaces that caveat with an attribution: first reproduce the published
+number with NVIDIA's own methodology (`trtllm-bench`, synthetic 128/128, offline), then change
+**one knob at a time** until the configuration *is* this repo's committed measurement
+(`scripts/waterfall.sh`, raw logs in `results/waterfall/`):
+
+| step | what changed | tok/s | delta |
+|---|---|---|---|
+| **W0** | NVIDIA's config (trtllm-bench, ISL/OSL 128/128, TP1, offline) | **27,785** | **= 100.3% of published** |
+| W1 | output length 128 → 256 (this repo's decode length) | 33,291 | +20% |
+| W2 | input length 128 → 12 (this repo's real prompt) | 46,156 | +39% |
+| W3 | kv fraction 0.90 → 0.80 | 46,224 | ±0% |
+| W4 | offline unbounded → **128 concurrent requests** | 22,912 | **−50%** |
+| W5 | bench harness → **trtllm-serve HTTP streaming** (TP1) | 11,952 | **−48%** |
+| W6 | TP 1 → 2 (= the committed 13,828 measurement) | 13,828 | +16% |
+
+![Waterfall: published number to our measurement](results/waterfall.png)
+
+Four findings, in order of importance:
+
+1. **The published number is real and this hardware reproduces it** — 27,785 vs 27,688
+   (100.3%), on the first fully-runnable configuration. The "53%" was never about kernels,
+   clocks, or our harness.
+2. **It is an *offline* number.** Letting the engine batch all 30,000 queued requests at once
+   (decode batches ~2,000) is worth +102% vs capping at 128 concurrent requests. No serving
+   deployment with bounded concurrency can reach a number measured this way — the comparison
+   was apples-to-oranges by construction.
+3. **The serving stack costs another −48%**: HTTP streaming + per-request scheduling +
+   the serve-tuned config (max_batch 256 vs 2048). Offline `trtllm-bench` and `trtllm-serve`
+   are different tools measuring different things.
+4. **The repo's workload shape is *favorable*, not adversarial** — short prompts and 256-token
+   decodes are worth +66% offline (W1+W2). The deficit never came from the workload.
+
+Two reproducibility findings about TRT-LLM 0.20 itself, documented with kept logs:
+NVIDIA's exact YAML (kv 0.95 + CUDA-graph list to 8192) **OOMs on an 80GB H100**
+(`results/waterfall/W0_nvidia_exact.txt`) — reproduction requires `--max_batch_size 2048`;
+and `trtllm-bench --tp 2` **crashes at executor init** (rank-1 illegal memory access,
+reproducible across GPU pairs and IPC settings — `results/waterfall/W4_tp2.txt`), which is
+why the TP step is measured on the serving side (W5→W6) where TP=2 works fine.
+
 ### Verification & cross-validation
 
 - **Roofline** (`bench/roofline_check.py`): all corrected c1 numbers land at **36–56 % of the
@@ -331,8 +375,9 @@ published ~1.77–2.1×). Reading the sweep:
   are the same physics from different sides: the headline **374 tok/s = ~89 % of the single-GPU
   roofline (≈419 tok/s) = ~45 % of the TP=2 aggregate ceiling (≈838 tok/s)**, and 45 % sits
   inside that 36–56 % band.
-- **Published data**: NVIDIA's perf-overview lists Llama-3.1-8B-FP8/H100 max throughput in the
-  ~26k tok/s range (high batch) — same order as the high-concurrency numbers here. Published
+- **Published data**: NVIDIA's perf-overview lists Llama-3.1-8B-FP8/H100 max throughput at
+  27,688 (0.20 docs) / 26,401 (current docs) tok/s — **reproduced at 100.3% in study 11**, and
+  decomposed: it is an offline unbounded-batching number, not a serving number. Published
   head-to-heads *conflict* on the high-concurrency winner: [BentoML][bentoml] matches this
   repo (TRT-LLM TTFT spikes past ~100 users, vLLM stays low), while [SqueezeBits][squeezebits]
   found *tuned* TRT-LLM wins at large batch sizes. **This repo resolved the conflict for its
@@ -364,29 +409,33 @@ published ~1.77–2.1×). Reading the sweep:
 Personal project for learning and benchmarking. Views and results are my own and do not represent any employer.
 
 ## Status
-**Ten measured studies complete** — studies 1–8 under a controlled 256-token methodology,
+**Eleven measured studies complete** — studies 1–8 under a controlled 256-token methodology,
 study 9 (spec decode vs concurrency) under a 200-token methodology (its speedup ratios are
-internally consistent; its absolute tok/s are not directly comparable to studies 1–8), and
-study 10 (NVFP4, 256-token methodology on sm_120) — with
+internally consistent; its absolute tok/s are not directly comparable to studies 1–8),
+study 10 (NVFP4, 256-token methodology on sm_120), and study 11 (the published-number
+waterfall) under NVIDIA's own `trtllm-bench` methodology — with
 TRT-LLM CUDA graphs correctly enabled and **every concurrency-1 number roofline-verified** (36–56% of
 the TP-aggregate HBM ceiling, nothing implausible): cross-model (Llama-3.1-8B / Qwen3-8B /
 Qwen3.5-9B), FP8 and BF16 head-to-heads (Llama-3.1-8B, TP=2), big-model head-to-head
 (Qwen2.5-32B, TP=4), FP8/BF16 quantization (Qwen3-8B), **tuned-vs-tuned** (chunked prefill +
 `MAX_UTILIZATION`), **compiled engine vs PyTorch backend** (+ Triton `tensorrt_llm`-backend
 deployment, deployed and measured), batch=1 speculative decoding, **speculative decoding
-under concurrency**, and **NVFP4 W4A4 serving on RTX PRO 6000 Blackwell** (the published
+under concurrency**, **NVFP4 W4A4 serving on RTX PRO 6000 Blackwell** (the published
 ~1.77× over BF16 reproduced at 2.13–2.52×, native FLASHINFER_CUTLASS FP4 kernels, accuracy
-spot-checked).
+spot-checked), and the **published-ceiling reproduction + waterfall attribution**.
 
 Headline: **TRT-LLM+CUDA-graph wins low/mid concurrency (latency) — FP8 c1 374 vs 300 tok/s;
 vLLM wins high concurrency (throughput) — c128 22.8k vs 13.8k.** The high-concurrency deficit
 was hypothesis-tested: it is **not** the scheduler defaults (study 7), **not** the PyTorch
 backend (study 8), and **not** CUDA graphs (both paths verified on). It is engine-runtime-level
-in TRT-LLM 0.20 for decode-heavy short-prompt serving. The journey — catching a silent
-CUDA-graph mis-config with a physics check, then killing two plausible explanations with
-controlled experiments — is the portfolio point.
+in TRT-LLM 0.20 for decode-heavy short-prompt serving. And the published 26–27k tok/s ceiling
+is now **reproduced at 100.3% (study 11)** — it is an *offline unbounded-batching* number;
+bounded concurrency (−50%) and the serving stack (−48%) account for the entire distance between
+it and any real deployment's throughput. The journey — catching a silent CUDA-graph mis-config
+with a physics check, killing plausible explanations with controlled experiments, then
+reproducing and decomposing the official benchmark — is the portfolio point.
 
-Remaining (roadmap): NVIDIA perf-overview 26.4k tok/s waterfall attribution (Phase 6),
-FP8 KV-cache study, genai-perf cross-check of the custom harness, draft-model (EAGLE-class)
-speculative decoding, multi-node. Note: TRT-LLM 0.20's compiled-engine path supports
-Llama-3.x / Qwen2.x; Qwen3 / Llama-4 run on its PyTorch backend or vLLM.
+Remaining (roadmap): FP8 KV-cache study, genai-perf cross-check of the custom harness,
+draft-model (EAGLE-class) speculative decoding, multi-node. Note: TRT-LLM 0.20's
+compiled-engine path supports Llama-3.x / Qwen2.x; Qwen3 / Llama-4 run on its PyTorch backend
+or vLLM.

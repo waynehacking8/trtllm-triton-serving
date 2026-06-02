@@ -1,0 +1,248 @@
+
+=============================
+== Triton Inference Server ==
+=============================
+
+NVIDIA Release 25.06 (build 179868725)
+Triton Server Version 2.59.0
+
+Copyright (c) 2018-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+Various files include modifications (c) NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+GOVERNING TERMS: The software and materials are governed by the NVIDIA Software License Agreement
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/)
+and the Product-Specific Terms for NVIDIA AI Products
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/).
+
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cuda module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.driver module instead.
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+2026-06-02 03:21:56,584 - INFO - flashinfer.jit: Prebuilt kernels not found, using JIT backend
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+[TensorRT-LLM] TensorRT-LLM version: 0.20.0
+[06/02/2026-03:21:57] [TRT-LLM] [I] Preparing to run throughput benchmark...
+Parse safetensors files:   0%|          | 0/2 [00:00<?, ?it/s]Parse safetensors files: 100%|██████████| 2/2 [00:00<00:00, 34100.03it/s]
+[06/02/2026-03:21:58] [TRT-LLM] [I] 
+===========================================================
+= DATASET DETAILS
+===========================================================
+Dataset Path:         /out/ds_12_256.jsonl
+Number of Sequences:  15000
+
+-- Percentiles statistics ---------------------------------
+
+        Input              Output           Seq. Length
+-----------------------------------------------------------
+MIN:    12.0000           256.0000           268.0000
+MAX:    12.0000           256.0000           268.0000
+AVG:    12.0000           256.0000           268.0000
+P50:    12.0000           256.0000           268.0000
+P90:    12.0000           256.0000           268.0000
+P95:    12.0000           256.0000           268.0000
+P99:    12.0000           256.0000           268.0000
+===========================================================
+
+Parse safetensors files:   0%|          | 0/2 [00:00<?, ?it/s]Parse safetensors files: 100%|██████████| 2/2 [00:00<00:00, 568.37it/s]
+[06/02/2026-03:21:58] [TRT-LLM] [I] Validating KV Cache config against kv_cache_dtype="auto"
+[06/02/2026-03:21:58] [TRT-LLM] [I] KV cache quantization set to "auto". Using checkpoint KV quantization.
+[06/02/2026-03:21:58] [TRT-LLM] [I] Estimated engine size: 7.48 GB
+[06/02/2026-03:21:58] [TRT-LLM] [I] Estimated total available memory for KV cache: 72.17 GB
+[06/02/2026-03:21:58] [TRT-LLM] [I] Estimated total KV cache memory: 68.56 GB
+[06/02/2026-03:21:58] [TRT-LLM] [I] Estimated max number of requests in KV cache memory: 4191.39
+[06/02/2026-03:21:58] [TRT-LLM] [I] Estimated max batch size (after fine-tune): 4096
+[06/02/2026-03:21:58] [TRT-LLM] [I] Estimated max num tokens (after fine-tune): 4608
+[06/02/2026-03:21:58] [TRT-LLM] [I] Max batch size and max num tokens not provided. Using heuristics or pre-defined settings: max_batch_size=4096, max_num_tokens=4608.
+[06/02/2026-03:21:58] [TRT-LLM] [I] Setting PyTorch max sequence length to 268
+[06/02/2026-03:21:58] [TRT-LLM] [I] Setting up throughput benchmark.
+[06/02/2026-03:21:58] [TRT-LLM] [W] Overriding pytorch_backend_config because it's specified in /out/llm_options_nvidia.yaml
+[06/02/2026-03:21:58] [TRT-LLM] [W] Using default gpus_per_node: 1
+[06/02/2026-03:21:58] [TRT-LLM] [I] Set nccl_plugin to None.
+[06/02/2026-03:21:58] [TRT-LLM] [I] Found /models/Llama-3.1-8B-Instruct-FP8/hf_quant_config.json, pre-quantized checkpoint is used.
+[06/02/2026-03:21:58] [TRT-LLM] [I] Setting quant_algo=FP8 form HF quant config.
+[06/02/2026-03:21:58] [TRT-LLM] [I] Setting kv_cache_quant_algo=FP8 form HF quant config.
+[06/02/2026-03:21:58] [TRT-LLM] [I] Setting exclude_modules=['lm_head'] from HF quant config.
+[06/02/2026-03:21:58] [TRT-LLM] [I] PyTorchConfig(extra_resource_managers={}, use_cuda_graph=True, cuda_graph_batch_sizes=[1, 2, 4, 8, 16, 32, 64, 128, 256, 384, 512, 1024, 2048, 4096, 8192], cuda_graph_max_batch_size=0, cuda_graph_padding_enabled=True, disable_overlap_scheduler=False, moe_max_num_tokens=None, attn_backend='TRTLLM', moe_backend='CUTLASS', mixed_sampler=False, enable_trtllm_sampler=False, kv_cache_dtype='auto', use_kv_cache=True, enable_iter_perf_stats=False, enable_iter_req_stats=False, print_iter_log=False, torch_compile_enabled=False, torch_compile_fullgraph=True, torch_compile_inductor_enabled=False, torch_compile_piecewise_cuda_graph=False, torch_compile_enable_userbuffers=True, autotuner_enabled=True, enable_layerwise_nvtx_marker=False, load_format=<LoadFormat.AUTO: 0>)
+[33;20mrank 0 using MpiPoolSession to spawn MPI processes
+[0m[06/02/2026-03:21:58] [TRT-LLM] [I] Generating a new HMAC key for server proxy_request_queue
+[06/02/2026-03:21:58] [TRT-LLM] [I] Generating a new HMAC key for server proxy_request_error_queue
+[06/02/2026-03:21:58] [TRT-LLM] [I] Generating a new HMAC key for server proxy_result_queue
+[06/02/2026-03:21:58] [TRT-LLM] [I] Generating a new HMAC key for server proxy_stats_queue
+[06/02/2026-03:21:58] [TRT-LLM] [I] Generating a new HMAC key for server proxy_kv_cache_events_queue
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cuda module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.driver module instead.
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+2026-06-02 03:22:04,518 - INFO - flashinfer.jit: Prebuilt kernels not found, using JIT backend
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+[TensorRT-LLM] TensorRT-LLM version: 0.20.0
+[TensorRT-LLM][INFO] Refreshed the MPI local session
+[06/02/2026-03:22:05] [TRT-LLM] [I] Validating KV Cache config against kv_cache_dtype="auto"
+[06/02/2026-03:22:05] [TRT-LLM] [I] KV cache quantization set to "auto". Using checkpoint KV quantization.
+[06/02/2026-03:22:05] [TRT-LLM] [I] Rank 0 uses 8.46 GB for model weights.
+[06/02/2026-03:22:05] [TRT-LLM] [I] Rank 0 prefetching /models/Llama-3.1-8B-Instruct-FP8/model-00001-of-00002.safetensors to memory...
+[06/02/2026-03:22:05] [TRT-LLM] [I] Rank 0 prefetching /models/Llama-3.1-8B-Instruct-FP8/model-00002-of-00002.safetensors to memory...
+[06/02/2026-03:22:07] [TRT-LLM] [I] Rank 0 finished prefetching /models/Llama-3.1-8B-Instruct-FP8/model-00002-of-00002.safetensors.
+[06/02/2026-03:22:08] [TRT-LLM] [I] Rank 0 finished prefetching /models/Llama-3.1-8B-Instruct-FP8/model-00001-of-00002.safetensors.
+[06/02/2026-03:22:08] [TRT-LLM] [I] Loading /models/Llama-3.1-8B-Instruct-FP8/model-00001-of-00002.safetensors
+[06/02/2026-03:22:08] [TRT-LLM] [I] Loading /models/Llama-3.1-8B-Instruct-FP8/model-00002-of-00002.safetensors
+Loading weights:   0%|          | 0/617 [00:00<?, ?it/s]Loading weights:   0%|          | 3/617 [00:00<00:29, 21.02it/s]Loading weights:   9%|▉         | 57/617 [00:00<00:02, 273.42it/s]Loading weights:  21%|██        | 131/617 [00:00<00:01, 459.28it/s]Loading weights:  32%|███▏      | 198/617 [00:00<00:00, 533.10it/s]Loading weights:  43%|████▎     | 264/617 [00:00<00:00, 561.26it/s]Loading weights:  55%|█████▌    | 340/617 [00:00<00:00, 604.79it/s]Loading weights:  65%|██████▌   | 402/617 [00:00<00:00, 582.57it/s]Loading weights:  75%|███████▍  | 462/617 [00:00<00:00, 583.47it/s]Loading weights:  84%|████████▍ | 521/617 [00:01<00:00, 560.31it/s]Loading weights:  94%|█████████▎| 578/617 [00:01<00:00, 537.37it/s]Loading weights: 100%|██████████| 617/617 [00:01<00:00, 452.95it/s]
+Model init total -- 3.97s
+[06/02/2026-03:22:09] [TRT-LLM] [W] Both free_gpu_memory_fraction and max_tokens are set (to 0.800000011920929 and 5184, respectively). The smaller value will be used.
+[TensorRT-LLM][INFO] Max KV cache pages per sequence: 9 [window size=269]
+[TensorRT-LLM][INFO] Number of tokens per block: 32.
+[TensorRT-LLM][INFO] [MemUsageChange] Allocated 0.32 GiB for max tokens in paged KV cache (5184).
+[06/02/2026-03:22:09] [TRT-LLM] [I] max_seq_len=269, max_num_requests=2048, max_num_tokens=4608
+[06/02/2026-03:22:09] [TRT-LLM] [I] [Autotuner]: Autotuning process starts ...
+[06/02/2026-03:22:09] [TRT-LLM] [I] Run autotuning warmup for batch size=1
+2026-06-02 03:22:09,696 - INFO - flashinfer.jit: Loading JIT ops: norm
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+2026-06-02 03:22:23,702 - INFO - flashinfer.jit: Finished loading JIT ops: norm
+2026-06-02 03:22:24,503 - INFO - flashinfer.jit: Loading JIT ops: silu_and_mul
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+2026-06-02 03:22:36,882 - INFO - flashinfer.jit: Finished loading JIT ops: silu_and_mul
+[06/02/2026-03:22:37] [TRT-LLM] [I] Autotuner Cache size after warmup 0
+[06/02/2026-03:22:37] [TRT-LLM] [I] [Autotuner]: Autotuning process ends
+[06/02/2026-03:22:37] [TRT-LLM] [I] Creating CUDA graph instances for 13 batch sizes.
+[06/02/2026-03:22:37] [TRT-LLM] [I] Memory used after loading model weights (inside torch) in memory usage profiling: 8.55 GiB
+[06/02/2026-03:22:37] [TRT-LLM] [I] Memory used after loading model weights (outside torch) in memory usage profiling: 1.74 GiB
+[06/02/2026-03:22:37] [TRT-LLM] [I] Memory dynamically allocated during inference (inside torch) in memory usage profiling: 0.60 GiB
+[06/02/2026-03:22:37] [TRT-LLM] [I] Memory used outside torch (e.g., NCCL and CUDA graphs) in memory usage profiling: 1.93 GiB
+[06/02/2026-03:22:37] [TRT-LLM] [I] Peak memory during memory usage profiling (torch + non-torch): 11.08 GiB, available KV cache memory when calculating max tokens: 54.73 GiB, fraction is set 0.800000011920929, kv size is 65536, device total memory 79.18 GiB, , tmp kv_mem 0.32 GiB
+[06/02/2026-03:22:37] [TRT-LLM] [I] Estimated max tokens in KV cache : 896736
+[06/02/2026-03:22:37] [TRT-LLM] [W] Both free_gpu_memory_fraction and max_tokens are set (to 0.800000011920929 and 896736, respectively). The smaller value will be used.
+[TensorRT-LLM][INFO] Max KV cache pages per sequence: 9 [window size=269]
+[TensorRT-LLM][INFO] Number of tokens per block: 32.
+[TensorRT-LLM][INFO] [MemUsageChange] Allocated 54.73 GiB for max tokens in paged KV cache (896736).
+[06/02/2026-03:22:37] [TRT-LLM] [I] max_seq_len=269, max_num_requests=2048, max_num_tokens=4608
+[06/02/2026-03:22:37] [TRT-LLM] [I] [Autotuner]: Autotuning process starts ...
+[06/02/2026-03:22:37] [TRT-LLM] [I] Run autotuning warmup for batch size=1
+[06/02/2026-03:22:37] [TRT-LLM] [I] Autotuner Cache size after warmup 0
+[06/02/2026-03:22:37] [TRT-LLM] [I] [Autotuner]: Autotuning process ends
+[06/02/2026-03:22:37] [TRT-LLM] [I] Creating CUDA graph instances for 13 batch sizes.
+[06/02/2026-03:22:37] [TRT-LLM] [I] Run generation only CUDA graph warmup for batch size=2048
+[06/02/2026-03:22:38] [TRT-LLM] [I] Run generation only CUDA graph warmup for batch size=1024
+[06/02/2026-03:22:38] [TRT-LLM] [I] Run generation only CUDA graph warmup for batch size=512
+[06/02/2026-03:22:38] [TRT-LLM] [I] Run generation only CUDA graph warmup for batch size=384
+[06/02/2026-03:22:38] [TRT-LLM] [I] Run generation only CUDA graph warmup for batch size=256
+[06/02/2026-03:22:39] [TRT-LLM] [I] Run generation only CUDA graph warmup for batch size=128
+[06/02/2026-03:22:39] [TRT-LLM] [I] Run generation only CUDA graph warmup for batch size=64
+[06/02/2026-03:22:39] [TRT-LLM] [I] Run generation only CUDA graph warmup for batch size=32
+[06/02/2026-03:22:39] [TRT-LLM] [I] Run generation only CUDA graph warmup for batch size=16
+[06/02/2026-03:22:40] [TRT-LLM] [I] Run generation only CUDA graph warmup for batch size=8
+[06/02/2026-03:22:40] [TRT-LLM] [I] Run generation only CUDA graph warmup for batch size=4
+[06/02/2026-03:22:40] [TRT-LLM] [I] Run generation only CUDA graph warmup for batch size=2
+[06/02/2026-03:22:41] [TRT-LLM] [I] Run generation only CUDA graph warmup for batch size=1
+[06/02/2026-03:22:41] [TRT-LLM] [I] Setting up for warmup...
+[06/02/2026-03:22:41] [TRT-LLM] [I] Running warmup.
+[06/02/2026-03:22:41] [TRT-LLM] [I] Starting benchmarking async task.
+[06/02/2026-03:22:41] [TRT-LLM] [I] Starting benchmark...
+[06/02/2026-03:22:41] [TRT-LLM] [I] Request submission complete. [count=2, time=0.0000s, rate=61734.11 req/s]
+[06/02/2026-03:22:43] [TRT-LLM] [I] Benchmark complete.
+[06/02/2026-03:22:43] [TRT-LLM] [I] Stopping LLM backend.
+[06/02/2026-03:22:43] [TRT-LLM] [I] Cancelling all 0 tasks to complete.
+[06/02/2026-03:22:43] [TRT-LLM] [I] All tasks cancelled.
+[06/02/2026-03:22:43] [TRT-LLM] [I] LLM Backend stopped.
+[06/02/2026-03:22:43] [TRT-LLM] [I] Worker task cancelled.
+[06/02/2026-03:22:43] [TRT-LLM] [I] Warmup done.
+[06/02/2026-03:22:43] [TRT-LLM] [I] No log path provided, skipping logging.
+[06/02/2026-03:22:43] [TRT-LLM] [I] Starting benchmarking async task.
+[06/02/2026-03:22:43] [TRT-LLM] [I] Starting benchmark...
+[06/02/2026-03:22:43] [TRT-LLM] [I] Request submission complete. [count=15000, time=0.0096s, rate=1563215.33 req/s]
+[06/02/2026-03:24:07] [TRT-LLM] [I] Benchmark complete.
+[06/02/2026-03:24:07] [TRT-LLM] [I] Stopping LLM backend.
+[06/02/2026-03:24:07] [TRT-LLM] [I] Cancelling all 0 tasks to complete.
+[06/02/2026-03:24:07] [TRT-LLM] [I] All tasks cancelled.
+[06/02/2026-03:24:07] [TRT-LLM] [I] LLM Backend stopped.
+[06/02/2026-03:24:07] [TRT-LLM] [I] Worker task cancelled.
+[06/02/2026-03:24:07] [TRT-LLM] [I] Benchmark done. Reporting results...
+[06/02/2026-03:24:07] [TRT-LLM] [I] Writing report to '/out/W3_kv080.report.json'.
+[06/02/2026-03:24:07] [TRT-LLM] [I] Validating KV Cache config against kv_cache_dtype="auto"
+[06/02/2026-03:24:07] [TRT-LLM] [I] KV cache quantization set to "auto". Using checkpoint KV quantization.
+[06/02/2026-03:24:07] [TRT-LLM] [I] Validating KV Cache config against kv_cache_dtype="auto"
+[06/02/2026-03:24:07] [TRT-LLM] [I] KV cache quantization set to "auto". Using checkpoint KV quantization.
+[06/02/2026-03:24:07] [TRT-LLM] [I] 
+
+===========================================================
+= PYTORCH BACKEND
+===========================================================
+Model:			nvidia/Llama-3.1-8B-Instruct-FP8
+Model Path:		/models/Llama-3.1-8B-Instruct-FP8
+TensorRT-LLM Version:	0.20.0
+Dtype:			bfloat16
+KV Cache Dtype:		FP8
+Quantization:		FP8
+
+===========================================================
+= REQUEST DETAILS 
+===========================================================
+Number of requests:             15000
+Number of concurrent requests:  7699.9444
+Average Input Length (tokens):  12.0000
+Average Output Length (tokens): 256.0000
+===========================================================
+= WORLD + RUNTIME INFORMATION 
+===========================================================
+TP Size:                1
+PP Size:                1
+EP Size:                None
+Max Runtime Batch Size: 2048
+Max Runtime Tokens:     4608
+Scheduling Policy:      GUARANTEED_NO_EVICT
+KV Memory Percentage:   80.00%
+Issue Rate (req/sec):   5.2549E+14
+
+===========================================================
+= PERFORMANCE OVERVIEW 
+===========================================================
+Request Throughput (req/sec):                     180.5631
+Total Output Throughput (tokens/sec):             46224.1507
+Total Token Throughput (tokens/sec):              48390.9078
+Total Latency (ms):                               83073.4571
+Average request latency (ms):                     42644.0666
+Per User Output Throughput [w/ ctx] (tps/user):   8.5450
+Per GPU Output Throughput (tps/gpu):              46224.1507
+
+-- Request Latency Breakdown (ms) -----------------------
+
+[Latency] P50    : 41133.6677
+[Latency] P90    : 70635.0965
+[Latency] P95    : 70926.4343
+[Latency] P99    : 75338.9315
+[Latency] MINIMUM: 8838.6576
+[Latency] MAXIMUM: 75365.6199
+[Latency] AVERAGE: 42644.0666
+
+===========================================================
+= DATASET DETAILS
+===========================================================
+Dataset Path:         /out/ds_12_256.jsonl
+Number of Sequences:  15000
+
+-- Percentiles statistics ---------------------------------
+
+        Input              Output           Seq. Length
+-----------------------------------------------------------
+MIN:    12.0000           256.0000           268.0000
+MAX:    12.0000           256.0000           268.0000
+AVG:    12.0000           256.0000           268.0000
+P50:    12.0000           256.0000           268.0000
+P90:    12.0000           256.0000           268.0000
+P95:    12.0000           256.0000           268.0000
+P99:    12.0000           256.0000           268.0000
+===========================================================
+
+[06/02/2026-03:24:07] [TRT-LLM] [I] Thread proxy_dispatch_result_thread stopped.
+[06/02/2026-03:24:07] [TRT-LLM] [I] Thread proxy_dispatch_kv_cache_events_thread stopped.
+[06/02/2026-03:24:07] [TRT-LLM] [I] Thread proxy_dispatch_stats_thread stopped.
+[06/02/2026-03:24:07] [TRT-LLM] [I] Thread await_response_thread stopped.
+[06/02/2026-03:24:07] [TRT-LLM] [I] Thread dispatch_stats_thread stopped.
+[06/02/2026-03:24:08] [TRT-LLM] [I] Thread dispatch_kv_cache_events_thread stopped.

@@ -112,8 +112,17 @@ answers, the exact method, and how to read the result.
 Goal: turn published serving-performance claims into measured, attributed results from this
 repo's own harness and hardware.
 
-- [ ] **NVIDIA perf-overview 26,401 tok/s: per-knob waterfall attribution.**
+- [x] **NVIDIA perf-overview 26,401 tok/s: per-knob waterfall attribution.**
   Published target: Llama-3.1-8B FP8, 1×H100 SXM, ISL/OSL 128/128, TP=1, kv_cache_free_gpu_mem_fraction=0.95.
+  **DONE — README study 11 / `scripts/waterfall.sh` / `results/waterfall/` / `results/waterfall.png`.**
+  Result: **published number reproduced at 100.3%** (27,785 vs 27,688, the release/0.20 docs
+  figure matching the installed version). Attribution: workload-shape knobs are *favorable*
+  (+66% offline); the entire serving deficit is **concurrency cap (−50%)** + **serving stack
+  (−48%)**, partially recovered by TP2 (+16%) → the committed 13,828. The "53% of published"
+  framing was apples-to-oranges by construction: the published figure is offline
+  unbounded-batching, not serving. Two 0.20 tool findings documented with kept logs: NVIDIA's
+  exact YAML OOMs on 80GB (needs max_batch_size 2048), and trtllm-bench --tp 2 crashes at init
+  (TP measured on the serving side instead).
   - **Question:** this repo's best TRT-LLM number (13.8k tok/s, c128, 256-token decode, TP=2,
     kv 0.8) is 53% of NVIDIA's published 26,401. How much of that gap is methodology
     (ISL/OSL 128/128 vs our decode-256, TP=1 vs TP=2, kv 0.95 vs 0.8, prefill-heavy vs

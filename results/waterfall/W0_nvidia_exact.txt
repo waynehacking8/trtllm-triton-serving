@@ -1,0 +1,223 @@
+
+=============================
+== Triton Inference Server ==
+=============================
+
+NVIDIA Release 25.06 (build 179868725)
+Triton Server Version 2.59.0
+
+Copyright (c) 2018-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+Various files include modifications (c) NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+GOVERNING TERMS: The software and materials are governed by the NVIDIA Software License Agreement
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/)
+and the Product-Specific Terms for NVIDIA AI Products
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/).
+
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cuda module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.driver module instead.
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+2026-06-02 03:50:09,373 - INFO - flashinfer.jit: Prebuilt kernels not found, using JIT backend
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+[TensorRT-LLM] TensorRT-LLM version: 0.20.0
+[06/02/2026-03:50:10] [TRT-LLM] [I] Preparing to run throughput benchmark...
+Parse safetensors files:   0%|          | 0/2 [00:00<?, ?it/s]Parse safetensors files: 100%|██████████| 2/2 [00:00<00:00, 34379.54it/s]
+[06/02/2026-03:50:11] [TRT-LLM] [I] 
+===========================================================
+= DATASET DETAILS
+===========================================================
+Dataset Path:         /out/ds_128_128.jsonl
+Number of Sequences:  30000
+
+-- Percentiles statistics ---------------------------------
+
+        Input              Output           Seq. Length
+-----------------------------------------------------------
+MIN:   128.0000           128.0000           256.0000
+MAX:   128.0000           128.0000           256.0000
+AVG:   128.0000           128.0000           256.0000
+P50:   128.0000           128.0000           256.0000
+P90:   128.0000           128.0000           256.0000
+P95:   128.0000           128.0000           256.0000
+P99:   128.0000           128.0000           256.0000
+===========================================================
+
+Parse safetensors files:   0%|          | 0/2 [00:00<?, ?it/s]Parse safetensors files: 100%|██████████| 2/2 [00:00<00:00, 421.47it/s]
+[06/02/2026-03:50:11] [TRT-LLM] [I] Validating KV Cache config against kv_cache_dtype="auto"
+[06/02/2026-03:50:11] [TRT-LLM] [I] KV cache quantization set to "auto". Using checkpoint KV quantization.
+[06/02/2026-03:50:11] [TRT-LLM] [I] Estimated engine size: 7.48 GB
+[06/02/2026-03:50:11] [TRT-LLM] [I] Estimated total available memory for KV cache: 72.17 GB
+[06/02/2026-03:50:11] [TRT-LLM] [I] Estimated total KV cache memory: 68.56 GB
+[06/02/2026-03:50:11] [TRT-LLM] [I] Estimated max number of requests in KV cache memory: 4387.86
+[06/02/2026-03:50:11] [TRT-LLM] [I] Estimated max batch size (after fine-tune): 4096
+[06/02/2026-03:50:11] [TRT-LLM] [I] Estimated max num tokens (after fine-tune): 8192
+[06/02/2026-03:50:11] [TRT-LLM] [I] Max batch size and max num tokens not provided. Using heuristics or pre-defined settings: max_batch_size=4096, max_num_tokens=8192.
+[06/02/2026-03:50:11] [TRT-LLM] [I] Setting PyTorch max sequence length to 256
+[06/02/2026-03:50:11] [TRT-LLM] [I] Setting up throughput benchmark.
+[06/02/2026-03:50:11] [TRT-LLM] [W] Overriding pytorch_backend_config because it's specified in /out/llm_options_nvidia.yaml
+[06/02/2026-03:50:11] [TRT-LLM] [W] Using default gpus_per_node: 1
+[06/02/2026-03:50:11] [TRT-LLM] [I] Set nccl_plugin to None.
+[06/02/2026-03:50:11] [TRT-LLM] [I] Found /models/Llama-3.1-8B-Instruct-FP8/hf_quant_config.json, pre-quantized checkpoint is used.
+[06/02/2026-03:50:11] [TRT-LLM] [I] Setting quant_algo=FP8 form HF quant config.
+[06/02/2026-03:50:11] [TRT-LLM] [I] Setting kv_cache_quant_algo=FP8 form HF quant config.
+[06/02/2026-03:50:11] [TRT-LLM] [I] Setting exclude_modules=['lm_head'] from HF quant config.
+[06/02/2026-03:50:11] [TRT-LLM] [I] PyTorchConfig(extra_resource_managers={}, use_cuda_graph=True, cuda_graph_batch_sizes=[1, 2, 4, 8, 16, 32, 64, 128, 256, 384, 512, 1024, 2048, 4096, 8192], cuda_graph_max_batch_size=0, cuda_graph_padding_enabled=True, disable_overlap_scheduler=False, moe_max_num_tokens=None, attn_backend='TRTLLM', moe_backend='CUTLASS', mixed_sampler=False, enable_trtllm_sampler=False, kv_cache_dtype='auto', use_kv_cache=True, enable_iter_perf_stats=False, enable_iter_req_stats=False, print_iter_log=False, torch_compile_enabled=False, torch_compile_fullgraph=True, torch_compile_inductor_enabled=False, torch_compile_piecewise_cuda_graph=False, torch_compile_enable_userbuffers=True, autotuner_enabled=True, enable_layerwise_nvtx_marker=False, load_format=<LoadFormat.AUTO: 0>)
+[33;20mrank 0 using MpiPoolSession to spawn MPI processes
+[0m[06/02/2026-03:50:11] [TRT-LLM] [I] Generating a new HMAC key for server proxy_request_queue
+[06/02/2026-03:50:11] [TRT-LLM] [I] Generating a new HMAC key for server proxy_request_error_queue
+[06/02/2026-03:50:11] [TRT-LLM] [I] Generating a new HMAC key for server proxy_result_queue
+[06/02/2026-03:50:11] [TRT-LLM] [I] Generating a new HMAC key for server proxy_stats_queue
+[06/02/2026-03:50:11] [TRT-LLM] [I] Generating a new HMAC key for server proxy_kv_cache_events_queue
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cuda module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.driver module instead.
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+2026-06-02 03:50:17,630 - INFO - flashinfer.jit: Prebuilt kernels not found, using JIT backend
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+[TensorRT-LLM] TensorRT-LLM version: 0.20.0
+[TensorRT-LLM][INFO] Refreshed the MPI local session
+[06/02/2026-03:50:18] [TRT-LLM] [I] Validating KV Cache config against kv_cache_dtype="auto"
+[06/02/2026-03:50:18] [TRT-LLM] [I] KV cache quantization set to "auto". Using checkpoint KV quantization.
+[06/02/2026-03:50:18] [TRT-LLM] [I] Rank 0 uses 8.46 GB for model weights.
+[06/02/2026-03:50:18] [TRT-LLM] [I] Rank 0 prefetching /models/Llama-3.1-8B-Instruct-FP8/model-00001-of-00002.safetensors to memory...
+[06/02/2026-03:50:18] [TRT-LLM] [I] Rank 0 prefetching /models/Llama-3.1-8B-Instruct-FP8/model-00002-of-00002.safetensors to memory...
+[06/02/2026-03:50:20] [TRT-LLM] [I] Rank 0 finished prefetching /models/Llama-3.1-8B-Instruct-FP8/model-00002-of-00002.safetensors.
+[06/02/2026-03:50:21] [TRT-LLM] [I] Rank 0 finished prefetching /models/Llama-3.1-8B-Instruct-FP8/model-00001-of-00002.safetensors.
+[06/02/2026-03:50:21] [TRT-LLM] [I] Loading /models/Llama-3.1-8B-Instruct-FP8/model-00001-of-00002.safetensors
+[06/02/2026-03:50:21] [TRT-LLM] [I] Loading /models/Llama-3.1-8B-Instruct-FP8/model-00002-of-00002.safetensors
+Loading weights:   0%|          | 0/617 [00:00<?, ?it/s]Loading weights:   0%|          | 3/617 [00:00<00:34, 17.96it/s]Loading weights:   9%|▉         | 55/617 [00:00<00:02, 231.66it/s]Loading weights:  18%|█▊        | 114/617 [00:00<00:01, 355.99it/s]Loading weights:  28%|██▊       | 171/617 [00:00<00:01, 422.31it/s]Loading weights:  37%|███▋      | 226/617 [00:00<00:00, 462.28it/s]Loading weights:  46%|████▌     | 283/617 [00:00<00:00, 493.38it/s]Loading weights:  55%|█████▌    | 340/617 [00:00<00:00, 516.44it/s]Loading weights:  64%|██████▍   | 397/617 [00:00<00:00, 510.13it/s]Loading weights:  74%|███████▎  | 454/617 [00:01<00:00, 511.32it/s]Loading weights:  83%|████████▎ | 511/617 [00:01<00:00, 502.15it/s]Loading weights:  91%|█████████ | 562/617 [00:01<00:00, 502.16it/s]Loading weights:  99%|█████████▉| 613/617 [00:01<00:00, 479.33it/s]Loading weights: 100%|██████████| 617/617 [00:01<00:00, 399.82it/s]
+Model init total -- 4.42s
+[06/02/2026-03:50:23] [TRT-LLM] [W] Both free_gpu_memory_fraction and max_tokens are set (to 0.949999988079071 and 9216, respectively). The smaller value will be used.
+[TensorRT-LLM][INFO] Max KV cache pages per sequence: 9 [window size=257]
+[TensorRT-LLM][INFO] Number of tokens per block: 32.
+[TensorRT-LLM][INFO] [MemUsageChange] Allocated 0.56 GiB for max tokens in paged KV cache (9216).
+[06/02/2026-03:50:23] [TRT-LLM] [I] max_seq_len=257, max_num_requests=4096, max_num_tokens=8192
+[06/02/2026-03:50:23] [TRT-LLM] [I] [Autotuner]: Autotuning process starts ...
+[06/02/2026-03:50:23] [TRT-LLM] [I] Run autotuning warmup for batch size=1
+2026-06-02 03:50:23,291 - INFO - flashinfer.jit: Loading JIT ops: norm
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+2026-06-02 03:50:37,927 - INFO - flashinfer.jit: Finished loading JIT ops: norm
+2026-06-02 03:50:38,886 - INFO - flashinfer.jit: Loading JIT ops: silu_and_mul
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+2026-06-02 03:50:51,963 - INFO - flashinfer.jit: Finished loading JIT ops: silu_and_mul
+[06/02/2026-03:50:52] [TRT-LLM] [I] Autotuner Cache size after warmup 0
+[06/02/2026-03:50:52] [TRT-LLM] [I] [Autotuner]: Autotuning process ends
+[06/02/2026-03:50:52] [TRT-LLM] [I] Creating CUDA graph instances for 14 batch sizes.
+[06/02/2026-03:50:52] [TRT-LLM] [I] Memory used after loading model weights (inside torch) in memory usage profiling: 8.55 GiB
+[06/02/2026-03:50:52] [TRT-LLM] [I] Memory used after loading model weights (outside torch) in memory usage profiling: 1.99 GiB
+[06/02/2026-03:50:52] [TRT-LLM] [I] Memory dynamically allocated during inference (inside torch) in memory usage profiling: 1.05 GiB
+[06/02/2026-03:50:52] [TRT-LLM] [I] Memory used outside torch (e.g., NCCL and CUDA graphs) in memory usage profiling: 2.26 GiB
+[06/02/2026-03:50:52] [TRT-LLM] [I] Peak memory during memory usage profiling (torch + non-torch): 11.86 GiB, available KV cache memory when calculating max tokens: 64.49 GiB, fraction is set 0.949999988079071, kv size is 65536, device total memory 79.18 GiB, , tmp kv_mem 0.56 GiB
+[06/02/2026-03:50:52] [TRT-LLM] [I] Estimated max tokens in KV cache : 1056623
+[06/02/2026-03:50:52] [TRT-LLM] [W] Both free_gpu_memory_fraction and max_tokens are set (to 0.949999988079071 and 1056623, respectively). The smaller value will be used.
+[TensorRT-LLM][INFO] Max KV cache pages per sequence: 9 [window size=257]
+[TensorRT-LLM][INFO] Number of tokens per block: 32.
+[TensorRT-LLM][INFO] [MemUsageChange] Allocated 64.49 GiB for max tokens in paged KV cache (1056640).
+[06/02/2026-03:50:52] [TRT-LLM] [I] max_seq_len=257, max_num_requests=4096, max_num_tokens=8192
+[06/02/2026-03:50:52] [TRT-LLM] [I] [Autotuner]: Autotuning process starts ...
+[06/02/2026-03:50:52] [TRT-LLM] [I] Run autotuning warmup for batch size=1
+[06/02/2026-03:50:52] [TRT-LLM] [I] Autotuner Cache size after warmup 0
+[06/02/2026-03:50:52] [TRT-LLM] [I] [Autotuner]: Autotuning process ends
+[06/02/2026-03:50:52] [TRT-LLM] [I] Creating CUDA graph instances for 14 batch sizes.
+[06/02/2026-03:50:52] [TRT-LLM] [I] Run generation only CUDA graph warmup for batch size=4096
+[06/02/2026-03:50:53] [TRT-LLM] [I] Run generation only CUDA graph warmup for batch size=2048
+[06/02/2026-03:50:53] [TRT-LLM] [E] Failed to initialize executor on rank 0: CUDA out of memory. Tried to allocate 1002.00 MiB. GPU 0 has a total capacity of 79.18 GiB of which 586.38 MiB is free. Process 2892987 has 588.00 MiB memory in use. Process 2893782 has 78.02 GiB memory in use. Of the allocated memory 12.60 GiB is allocated by PyTorch, with 3.44 GiB allocated in private pools (e.g., CUDA Graphs), and 43.11 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+[06/02/2026-03:50:53] [TRT-LLM] [E] Traceback (most recent call last):
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/executor/worker.py", line 698, in worker_main
+    worker: ExecutorBindingsWorker = worker_cls(
+                                     ^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/executor/worker.py", line 128, in __init__
+    self.engine = _create_engine()
+                  ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/executor/worker.py", line 126, in _create_engine
+    return create_executor(**args)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/pyexecutor/py_executor_creator.py", line 228, in create_py_executor
+    py_executor = create_py_executor_instance(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/pyexecutor/_util.py", line 446, in create_py_executor_instance
+    return PyExecutor(resource_manager,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/pyexecutor/py_executor.py", line 245, in __init__
+    self.model_engine.warmup(self.resource_manager)
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/pyexecutor/model_engine.py", line 709, in warmup
+    self.forward(batch,
+  File "/usr/local/lib/python3.12/dist-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/utils.py", line 66, in wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/pyexecutor/model_engine.py", line 1965, in forward
+    pool = maybe_graph.capture(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/pyexecutor/cuda_graph_runner.py", line 110, in capture
+    forward_fn(inputs)
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/pyexecutor/model_engine.py", line 1966, in <lambda>
+    lambda inputs: self._forward_step(
+                   ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/pyexecutor/model_engine.py", line 2012, in _forward_step
+    logits = self.model_forward(
+             ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/pyexecutor/model_engine.py", line 2000, in model_forward
+    return self.model.forward(**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/models/modeling_utils.py", line 526, in forward
+    return self.logits_processor.forward(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/modules/logits_processor.py", line 31, in forward
+    logits = logits.float()
+             ^^^^^^^^^^^^^^
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1002.00 MiB. GPU 0 has a total capacity of 79.18 GiB of which 586.38 MiB is free. Process 2892987 has 588.00 MiB memory in use. Process 2893782 has 78.02 GiB memory in use. Of the allocated memory 12.60 GiB is allocated by PyTorch, with 3.44 GiB allocated in private pools (e.g., CUDA Graphs), and 43.11 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+Traceback (most recent call last):
+  File "/usr/local/bin/trtllm-bench", line 8, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/click/core.py", line 1442, in __call__
+    return self.main(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/click/core.py", line 1363, in main
+    rv = self.invoke(ctx)
+         ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/click/core.py", line 1830, in invoke
+    return _process_result(sub_ctx.command.invoke(sub_ctx))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/click/core.py", line 1226, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/click/core.py", line 794, in invoke
+    return callback(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/click/decorators.py", line 46, in new_func
+    return f(get_current_context().obj, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/bench/benchmark/throughput.py", line 347, in throughput_command
+    llm = PyTorchLLM(**kwargs)
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/llm.py", line 27, in __init__
+    super().__init__(model, tokenizer, tokenizer_mode, skip_tokenizer_init,
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/llmapi/llm.py", line 176, in __init__
+    raise e
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/llmapi/llm.py", line 171, in __init__
+    self._build_model()
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/llmapi/llm.py", line 613, in _build_model
+    self._executor = self._executor_cls.create(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/executor/executor.py", line 411, in create
+    return ExecutorBindingsProxy(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/executor/proxy.py", line 100, in __init__
+    self._start_executor_workers(worker_kwargs)
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/executor/proxy.py", line 319, in _start_executor_workers
+    raise ready_signal
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1002.00 MiB. GPU 0 has a total capacity of 79.18 GiB of which 586.38 MiB is free. Process 2892987 has 588.00 MiB memory in use. Process 2893782 has 78.02 GiB memory in use. Of the allocated memory 12.60 GiB is allocated by PyTorch, with 3.44 GiB allocated in private pools (e.g., CUDA Graphs), and 43.11 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)

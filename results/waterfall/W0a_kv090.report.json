@@ -1,0 +1,84 @@
+{
+    "engine": {
+        "model": "nvidia/Llama-3.1-8B-Instruct-FP8",
+        "model_path": "/models/Llama-3.1-8B-Instruct-FP8",
+        "engine_dir": "None",
+        "version": "0.20.0",
+        "backend": "Pytorch",
+        "dtype": "bfloat16",
+        "kv_cache_dtype": "FP8",
+        "quantization": "FP8"
+    },
+    "world_info": {
+        "tp_size": 1,
+        "pp_size": 1,
+        "ep_size": null,
+        "world_size": 1,
+        "max_batch_size": 2048,
+        "max_num_tokens": 8192,
+        "scheduling_policy": "GUARANTEED_NO_EVICT",
+        "kv_cache_percentage": 90.0,
+        "issue_rate": 488939635333333.3
+    },
+    "request_info": {
+        "num_requests": 30000,
+        "avg_num_concurrent_requests": 14812.13384627487,
+        "avg_input_length": 128.0,
+        "avg_output_length": 128.0
+    },
+    "performance": {
+        "total_latency_ms": 138204.201992,
+        "avg_request_latency_ms": 68236.63793410374,
+        "request_throughput_req_s": 217.07010038476662,
+        "system_output_throughput_tok_s": 27784.972849250127,
+        "system_total_throughput_tok_s": 55569.945698500254,
+        "output_throughput_per_user_tok_s": 2.802153143879047,
+        "output_throughput_per_gpu_tok_s": 27784.972849250127,
+        "request_latency_percentiles_ms": {
+            "p50": 68923.26018499999,
+            "p90": 117628.992535,
+            "p95": 119752.86759699999,
+            "p99": 123591.726182,
+            "minimum": 13933.333454,
+            "maximum": 123606.701932,
+            "average": 68236.63793410374
+        }
+    },
+    "dataset": {
+        "isl_stats": {
+            "p50": 128.0,
+            "p90": 128.0,
+            "p95": 128.0,
+            "p99": 128.0,
+            "minimum": 128.0,
+            "maximum": 128.0,
+            "average": 128.0
+        },
+        "osl_stats": {
+            "p50": 128.0,
+            "p90": 128.0,
+            "p95": 128.0,
+            "p99": 128.0,
+            "minimum": 128.0,
+            "maximum": 128.0,
+            "average": 128.0
+        },
+        "seq_len_stats": {
+            "p50": 256.0,
+            "p90": 256.0,
+            "p95": 256.0,
+            "p99": 256.0,
+            "minimum": 256.0,
+            "maximum": 256.0,
+            "average": 256.0
+        },
+        "num_requests": 30000,
+        "dataset_path": "/out/ds_128_128.jsonl",
+        "max_isl": 128,
+        "max_osl": 128,
+        "max_sequence_length": 256,
+        "avg_isl": 128,
+        "avg_osl": 128,
+        "avg_sequence_length": 256
+    }
+}

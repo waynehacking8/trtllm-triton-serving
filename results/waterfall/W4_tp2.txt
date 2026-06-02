@@ -1,0 +1,231 @@
+
+=============================
+== Triton Inference Server ==
+=============================
+
+NVIDIA Release 25.06 (build 179868725)
+Triton Server Version 2.59.0
+
+Copyright (c) 2018-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+Various files include modifications (c) NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+GOVERNING TERMS: The software and materials are governed by the NVIDIA Software License Agreement
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/)
+and the Product-Specific Terms for NVIDIA AI Products
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/).
+
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cuda module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.driver module instead.
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+2026-06-02 03:35:41,685 - INFO - flashinfer.jit: Prebuilt kernels not found, using JIT backend
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+[TensorRT-LLM] TensorRT-LLM version: 0.20.0
+[06/02/2026-03:35:42] [TRT-LLM] [I] Preparing to run throughput benchmark...
+Parse safetensors files:   0%|          | 0/2 [00:00<?, ?it/s]Parse safetensors files: 100%|██████████| 2/2 [00:00<00:00, 19152.07it/s]
+[06/02/2026-03:35:43] [TRT-LLM] [I] 
+===========================================================
+= DATASET DETAILS
+===========================================================
+Dataset Path:         /out/ds_12_256.jsonl
+Number of Sequences:  15000
+
+-- Percentiles statistics ---------------------------------
+
+        Input              Output           Seq. Length
+-----------------------------------------------------------
+MIN:    12.0000           256.0000           268.0000
+MAX:    12.0000           256.0000           268.0000
+AVG:    12.0000           256.0000           268.0000
+P50:    12.0000           256.0000           268.0000
+P90:    12.0000           256.0000           268.0000
+P95:    12.0000           256.0000           268.0000
+P99:    12.0000           256.0000           268.0000
+===========================================================
+
+Parse safetensors files:   0%|          | 0/2 [00:00<?, ?it/s]Parse safetensors files: 100%|██████████| 2/2 [00:00<00:00, 523.34it/s]
+[06/02/2026-03:35:43] [TRT-LLM] [I] Validating KV Cache config against kv_cache_dtype="auto"
+[06/02/2026-03:35:43] [TRT-LLM] [I] KV cache quantization set to "auto". Using checkpoint KV quantization.
+[06/02/2026-03:35:43] [TRT-LLM] [I] Estimated engine size: 7.48 GB
+[06/02/2026-03:35:43] [TRT-LLM] [I] Estimated total available memory for KV cache: 151.82 GB
+[06/02/2026-03:35:43] [TRT-LLM] [I] Estimated total KV cache memory: 144.23 GB
+[06/02/2026-03:35:43] [TRT-LLM] [I] Estimated max number of requests in KV cache memory: 8817.12
+[06/02/2026-03:35:43] [TRT-LLM] [I] Estimated max batch size (after fine-tune): 4096
+[06/02/2026-03:35:43] [TRT-LLM] [I] Estimated max num tokens (after fine-tune): 4608
+[06/02/2026-03:35:43] [TRT-LLM] [I] Max batch size and max num tokens not provided. Using heuristics or pre-defined settings: max_batch_size=4096, max_num_tokens=4608.
+[06/02/2026-03:35:43] [TRT-LLM] [I] Setting PyTorch max sequence length to 268
+[06/02/2026-03:35:43] [TRT-LLM] [I] Setting up throughput benchmark.
+[06/02/2026-03:35:43] [TRT-LLM] [W] Overriding pytorch_backend_config because it's specified in /out/llm_options_cg2048.yaml
+[06/02/2026-03:35:43] [TRT-LLM] [W] Using default gpus_per_node: 2
+[06/02/2026-03:35:43] [TRT-LLM] [I] Set nccl_plugin to None.
+[06/02/2026-03:35:43] [TRT-LLM] [I] start MpiSession with 2 workers
+[06/02/2026-03:35:43] [TRT-LLM] [I] Found /models/Llama-3.1-8B-Instruct-FP8/hf_quant_config.json, pre-quantized checkpoint is used.
+[06/02/2026-03:35:43] [TRT-LLM] [I] Setting quant_algo=FP8 form HF quant config.
+[06/02/2026-03:35:43] [TRT-LLM] [I] Setting kv_cache_quant_algo=FP8 form HF quant config.
+[06/02/2026-03:35:43] [TRT-LLM] [I] Setting exclude_modules=['lm_head'] from HF quant config.
+[06/02/2026-03:35:43] [TRT-LLM] [I] PyTorchConfig(extra_resource_managers={}, use_cuda_graph=True, cuda_graph_batch_sizes=[1, 2, 4, 8, 16, 32, 64, 128, 256, 384, 512, 1024, 2048], cuda_graph_max_batch_size=0, cuda_graph_padding_enabled=True, disable_overlap_scheduler=False, moe_max_num_tokens=None, attn_backend='TRTLLM', moe_backend='CUTLASS', mixed_sampler=False, enable_trtllm_sampler=False, kv_cache_dtype='auto', use_kv_cache=True, enable_iter_perf_stats=False, enable_iter_req_stats=False, print_iter_log=False, torch_compile_enabled=False, torch_compile_fullgraph=True, torch_compile_inductor_enabled=False, torch_compile_piecewise_cuda_graph=False, torch_compile_enable_userbuffers=True, autotuner_enabled=True, enable_layerwise_nvtx_marker=False, load_format=<LoadFormat.AUTO: 0>)
+[33;20mrank 0 using MpiPoolSession to spawn MPI processes
+[0m[06/02/2026-03:35:43] [TRT-LLM] [I] Generating a new HMAC key for server proxy_request_queue
+[06/02/2026-03:35:43] [TRT-LLM] [I] Generating a new HMAC key for server proxy_request_error_queue
+[06/02/2026-03:35:43] [TRT-LLM] [I] Generating a new HMAC key for server proxy_result_queue
+[06/02/2026-03:35:43] [TRT-LLM] [I] Generating a new HMAC key for server proxy_stats_queue
+[06/02/2026-03:35:43] [TRT-LLM] [I] Generating a new HMAC key for server proxy_kv_cache_events_queue
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cuda module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.driver module instead.
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cuda module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.driver module instead.
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+2026-06-02 03:35:49,308 - INFO - flashinfer.jit: Prebuilt kernels not found, using JIT backend
+2026-06-02 03:35:49,308 - INFO - flashinfer.jit: Prebuilt kernels not found, using JIT backend
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+[TensorRT-LLM] TensorRT-LLM version: 0.20.0
+[TensorRT-LLM] TensorRT-LLM version: 0.20.0
+[TensorRT-LLM][INFO] Refreshed the MPI local session
+[TensorRT-LLM][INFO] Refreshed the MPI local session
+[06/02/2026-03:35:50] [TRT-LLM] [I] Validating KV Cache config against kv_cache_dtype="auto"
+[06/02/2026-03:35:50] [TRT-LLM] [I] KV cache quantization set to "auto". Using checkpoint KV quantization.
+[06/02/2026-03:35:50] [TRT-LLM] [I] Rank 0 uses 4.23 GB for model weights.
+[06/02/2026-03:35:50] [TRT-LLM] [I] Rank 0 prefetching /models/Llama-3.1-8B-Instruct-FP8/model-00001-of-00002.safetensors to memory...
+Loading weights:   0%|          | 0/617 [00:00<?, ?it/s]Loading weights:   3%|▎         | 17/617 [00:00<00:03, 169.05it/s]Loading weights:  15%|█▌        | 95/617 [00:00<00:01, 507.58it/s][06/02/2026-03:35:52] [TRT-LLM] [I] Rank 0 finished prefetching /models/Llama-3.1-8B-Instruct-FP8/model-00001-of-00002.safetensors.
+[06/02/2026-03:35:53] [TRT-LLM] [I] Loading /models/Llama-3.1-8B-Instruct-FP8/model-00001-of-00002.safetensors
+[06/02/2026-03:35:53] [TRT-LLM] [I] Loading /models/Llama-3.1-8B-Instruct-FP8/model-00002-of-00002.safetensors
+Loading weights:   0%|          | 0/617 [00:00<?, ?it/s]Loading weights:  31%|███       | 190/617 [00:00<00:00, 687.79it/s]Loading weights:   1%|▏         | 8/617 [00:00<00:07, 78.51it/s]Loading weights:  46%|████▌     | 285/617 [00:00<00:00, 764.97it/s]Loading weights:  14%|█▍        | 87/617 [00:00<00:01, 486.78it/s]Loading weights:  61%|██████▏   | 378/617 [00:00<00:00, 813.38it/s]Loading weights:  29%|██▉       | 179/617 [00:00<00:00, 679.09it/s]Loading weights:  75%|███████▍  | 460/617 [00:00<00:00, 789.16it/s]Loading weights:  43%|████▎     | 266/617 [00:00<00:00, 741.88it/s]Loading weights:  87%|████████▋ | 539/617 [00:00<00:00, 775.28it/s]Loading weights:  59%|█████▊    | 361/617 [00:00<00:00, 800.71it/s]Loading weights:  71%|███████▏  | 441/617 [00:00<00:00, 797.58it/s]Loading weights: 100%|██████████| 617/617 [00:00<00:00, 599.79it/s]Loading weights: 100%|██████████| 617/617 [00:00<00:00, 658.50it/s]
+Model init total -- 3.33s
+Loading weights:  84%|████████▍ | 521/617 [00:00<00:00, 792.56it/s]Loading weights:  97%|█████████▋| 601/617 [00:00<00:00, 770.98it/s]Loading weights: 100%|██████████| 617/617 [00:00<00:00, 658.16it/s]
+Model init total -- 3.61s
+[06/02/2026-03:35:54] [TRT-LLM] [W] Both free_gpu_memory_fraction and max_tokens are set (to 0.800000011920929 and 5184, respectively). The smaller value will be used.
+[TensorRT-LLM][INFO] Max KV cache pages per sequence: 9 [window size=269]
+[TensorRT-LLM][INFO] Max KV cache pages per sequence: 9 [window size=269]
+[TensorRT-LLM][INFO] Number of tokens per block: 32.
+[TensorRT-LLM][INFO] [MemUsageChange] Allocated 0.16 GiB for max tokens in paged KV cache (5184).
+[TensorRT-LLM][INFO] Number of tokens per block: 32.
+[TensorRT-LLM][INFO] [MemUsageChange] Allocated 0.16 GiB for max tokens in paged KV cache (5184).
+[06/02/2026-03:35:54] [TRT-LLM] [I] max_seq_len=269, max_num_requests=2048, max_num_tokens=4608
+[06/02/2026-03:35:54] [TRT-LLM] [I] [Autotuner]: Autotuning process starts ...
+[06/02/2026-03:35:54] [TRT-LLM] [I] Run autotuning warmup for batch size=1
+[TensorRT-LLM][INFO] Detecting local TP group for rank 1
+[TensorRT-LLM][INFO] Detecting local TP group for rank 0
+[TensorRT-LLM][INFO] TP group is intra-node for rank 0
+[TensorRT-LLM][INFO] TP group is intra-node for rank 1
+2026-06-02 03:35:54,648 - INFO - flashinfer.jit: Loading JIT ops: norm
+2026-06-02 03:35:54,648 - INFO - flashinfer.jit: Loading JIT ops: norm
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+2026-06-02 03:36:08,104 - INFO - flashinfer.jit: Finished loading JIT ops: norm
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+2026-06-02 03:36:08,156 - INFO - flashinfer.jit: Finished loading JIT ops: norm
+2026-06-02 03:36:08,966 - INFO - flashinfer.jit: Loading JIT ops: silu_and_mul
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+2026-06-02 03:36:09,001 - INFO - flashinfer.jit: Loading JIT ops: silu_and_mul
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+2026-06-02 03:36:20,994 - INFO - flashinfer.jit: Finished loading JIT ops: silu_and_mul
+/usr/local/lib/python3.12/dist-packages/torch/utils/cpp_extension.py:2330: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+2026-06-02 03:36:21,057 - INFO - flashinfer.jit: Finished loading JIT ops: silu_and_mul
+[06/02/2026-03:36:21] [TRT-LLM] [I] Autotuner Cache size after warmup 0
+[06/02/2026-03:36:21] [TRT-LLM] [I] [Autotuner]: Autotuning process ends
+[06/02/2026-03:36:21] [TRT-LLM] [I] Creating CUDA graph instances for 13 batch sizes.
+[06/02/2026-03:36:21] [TRT-LLM] [I] Memory used after loading model weights (inside torch) in memory usage profiling: 4.32 GiB
+[06/02/2026-03:36:21] [TRT-LLM] [I] Memory used after loading model weights (outside torch) in memory usage profiling: 2.70 GiB
+[06/02/2026-03:36:21] [TRT-LLM] [I] Memory dynamically allocated during inference (inside torch) in memory usage profiling: 0.39 GiB
+[06/02/2026-03:36:21] [TRT-LLM] [I] Memory used outside torch (e.g., NCCL and CUDA graphs) in memory usage profiling: 2.89 GiB
+[06/02/2026-03:36:21] [TRT-LLM] [I] Peak memory during memory usage profiling (torch + non-torch): 7.60 GiB, available KV cache memory when calculating max tokens: 57.39 GiB, fraction is set 0.800000011920929, kv size is 32768, device total memory 79.18 GiB, , tmp kv_mem 0.16 GiB
+[06/02/2026-03:36:21] [TRT-LLM] [I] Estimated max tokens in KV cache : 1880626
+[06/02/2026-03:36:21] [TRT-LLM] [E] Failed to initialize executor on rank 1: [TensorRT-LLM][ERROR] CUDA runtime error in ::cudaFree(ptr): an illegal memory access was encountered (/workspace/tensorrt_llm/cpp/tensorrt_llm/runtime/tllmBuffers.h:98)
+1       0x7f684f8a7d2b /usr/local/lib/python3.12/dist-packages/tensorrt_llm/libs/libtensorrt_llm.so(+0x1cedd2b) [0x7f684f8a7d2b]
+2       0x7f684fe47e57 virtual thunk to tensorrt_llm::runtime::GenericTensor<tensorrt_llm::runtime::CudaAllocator>::release() + 119
+3       0x7f685087700a tensorrt_llm::batch_manager::kv_cache_manager::WindowBlockManager::releasePools() + 74
+4       0x7f68508770a9 tensorrt_llm::batch_manager::kv_cache_manager::BlockManager::releasePools() + 41
+5       0x7f68bfc581c8 /usr/local/lib/python3.12/dist-packages/tensorrt_llm/bindings.cpython-312-x86_64-linux-gnu.so(+0x12c1c8) [0x7f68bfc581c8]
+6       0x7f68bfbf2693 /usr/local/lib/python3.12/dist-packages/tensorrt_llm/bindings.cpython-312-x86_64-linux-gnu.so(+0xc6693) [0x7f68bfbf2693]
+7             0x5824ef /usr/bin/python3() [0x5824ef]
+8             0x549155 _PyObject_MakeTpCall + 117
+9             0x5d795f _PyEval_EvalFrameDefault + 2783
+10            0x54aa6a _PyObject_Call_Prepend + 394
+11            0x59e68f /usr/bin/python3() [0x59e68f]
+12            0x59a0d3 /usr/bin/python3() [0x59a0d3]
+13            0x54921e _PyObject_MakeTpCall + 318
+14            0x5d795f _PyEval_EvalFrameDefault + 2783
+15            0x5d5e4b PyEval_EvalCode + 347
+16            0x5d39dc /usr/bin/python3() [0x5d39dc]
+17            0x58236d /usr/bin/python3() [0x58236d]
+18            0x549b55 PyObject_Vectorcall + 53
+19            0x5d795f _PyEval_EvalFrameDefault + 2783
+20            0x6bd362 /usr/bin/python3() [0x6bd362]
+21            0x6bcf92 Py_RunMain + 562
+22            0x6bcbfd Py_BytesMain + 45
+23      0x7f6c4db031ca /usr/lib/x86_64-linux-gnu/libc.so.6(+0x2a1ca) [0x7f6c4db031ca]
+24      0x7f6c4db0328b __libc_start_main + 139
+25            0x658325 _start + 37
+[06/02/2026-03:36:21] [TRT-LLM] [E] Traceback (most recent call last):
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/executor/worker.py", line 698, in worker_main
+    worker: ExecutorBindingsWorker = worker_cls(
+                                     ^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/executor/worker.py", line 128, in __init__
+    self.engine = _create_engine()
+                  ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/executor/worker.py", line 126, in _create_engine
+    return create_executor(**args)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/pyexecutor/py_executor_creator.py", line 197, in create_py_executor
+    kv_cache_max_tokens = estimate_max_kv_cache_tokens(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/pyexecutor/_util.py", line 218, in estimate_max_kv_cache_tokens
+    "kv_cache_manager").shutdown()
+                        ^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/pyexecutor/resource_manager.py", line 239, in shutdown
+    self.impl.release_pools()
+RuntimeError: [TensorRT-LLM][ERROR] CUDA runtime error in ::cudaFree(ptr): an illegal memory access was encountered (/workspace/tensorrt_llm/cpp/tensorrt_llm/runtime/tllmBuffers.h:98)
+1       0x7f684f8a7d2b /usr/local/lib/python3.12/dist-packages/tensorrt_llm/libs/libtensorrt_llm.so(+0x1cedd2b) [0x7f684f8a7d2b]
+2       0x7f684fe47e57 virtual thunk to tensorrt_llm::runtime::GenericTensor<tensorrt_llm::runtime::CudaAllocator>::release() + 119
+3       0x7f685087700a tensorrt_llm::batch_manager::kv_cache_manager::WindowBlockManager::releasePools() + 74
+4       0x7f68508770a9 tensorrt_llm::batch_manager::kv_cache_manager::BlockManager::releasePools() + 41
+5       0x7f68bfc581c8 /usr/local/lib/python3.12/dist-packages/tensorrt_llm/bindings.cpython-312-x86_64-linux-gnu.so(+0x12c1c8) [0x7f68bfc581c8]
+6       0x7f68bfbf2693 /usr/local/lib/python3.12/dist-packages/tensorrt_llm/bindings.cpython-312-x86_64-linux-gnu.so(+0xc6693) [0x7f68bfbf2693]
+7             0x5824ef /usr/bin/python3() [0x5824ef]
+8             0x549155 _PyObject_MakeTpCall + 117
+9             0x5d795f _PyEval_EvalFrameDefault + 2783
+10            0x54aa6a _PyObject_Call_Prepend + 394
+11            0x59e68f /usr/bin/python3() [0x59e68f]
+12            0x59a0d3 /usr/bin/python3() [0x59a0d3]
+13            0x54921e _PyObject_MakeTpCall + 318
+14            0x5d795f _PyEval_EvalFrameDefault + 2783
+15            0x5d5e4b PyEval_EvalCode + 347
+16            0x5d39dc /usr/bin/python3() [0x5d39dc]
+17            0x58236d /usr/bin/python3() [0x58236d]
+18            0x549b55 PyObject_Vectorcall + 53
+19            0x5d795f _PyEval_EvalFrameDefault + 2783
+20            0x6bd362 /usr/bin/python3() [0x6bd362]
+21            0x6bcf92 Py_RunMain + 562
+22            0x6bcbfd Py_BytesMain + 45
+23      0x7f6c4db031ca /usr/lib/x86_64-linux-gnu/libc.so.6(+0x2a1ca) [0x7f6c4db031ca]
+24      0x7f6c4db0328b __libc_start_main + 139
+25            0x658325 _start + 37
+
+[06/02/2026-03:36:22] [TRT-LLM] [E] Executor worker died during initialization.
+[06/02/2026-03:37:22] [TRT-LLM] [F] MpiSession shutdown timeout, aborting...
+[06/02/2026-03:37:22] [TRT-LLM] [I] Reason to shutdown: RuntimeError('Executor worker died during initialization')
+--------------------------------------------------------------------------
+MPI_ABORT was invoked on rank 0 in communicator MPI_COMM_WORLD
+with errorcode 1.
+
+NOTE: invoking MPI_ABORT causes Open MPI to kill all MPI processes.
+You may or may not see output from other processes, depending on
+exactly when Open MPI kills them.
+--------------------------------------------------------------------------
