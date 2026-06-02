@@ -27,14 +27,19 @@ throughput/latency compare the same work across stacks).
 - 4× NVIDIA H100 80GB, NVLink. Tensor parallel sized per model: **TP=2** for the 8B head-to-heads,
   **TP=4** for Qwen2.5-32B.
 - Driver + CUDA per the TensorRT-LLM container (see `docs/design-decisions.md`).
+- **RTX PRO 6000 Blackwell Max-Q (sm_120)**, single GPU — study 10's NVFP4 W4A4 serving
+  (the repo's first non-Hopper data point; environment in `results/sm120_environment.txt`).
 
 ## Layout
 ```
 scripts/build_engine.sh     # HF -> TRT-LLM checkpoint -> engine (TP=4)
 scripts/serve_triton.sh     # launch Triton with the tensorrt_llm backend
 scripts/serve_vllm.sh       # vLLM baseline (TP=4) for comparison
+scripts/serve_vllm_sm120.sh # vLLM on the RTX PRO 6000 (sm_120) box, TP=1 (study 10)
+scripts/quantize_nvfp4.py   # Llama-3.1-8B -> NVFP4 (W4A4) checkpoint via TensorRT-Model-Optimizer
 bench/bench.py              # async OpenAI-compatible load test (TTFT/throughput/ITL)
 bench/sweep.sh              # concurrency sweep -> results/*.json
+bench/accuracy_mc.py        # ARC-Challenge accuracy spot-check via the serving endpoint
 triton_model_repo/          # Triton ensemble + tensorrt_llm model config
 docs/roadmap.md             # what's done / in progress / planned
 docs/design-decisions.md    # parallelism, quant, batching choices and why
@@ -267,6 +272,56 @@ running below ~c32 (≥2× win); it is merely neutral by c≈128.**
 
 ![spec decode speedup vs concurrency](results/spec_concurrency.png)
 
+### 10. NVFP4 W4A4 on RTX PRO 6000 Blackwell (sm_120) — the literature-ceiling reproduction
+
+All numbers above are Hopper. This study adds the repo's first **sm_120** data point and tests a
+published claim against our own harness (roadmap Phase 6): **NVFP4 W4A4 should deliver
+~1.77–2.1× over BF16 at high concurrency, with accuracy parity** (NVIDIA NVFP4 / Jarvis Labs).
+
+Setup: Llama-3.1-8B-Instruct → NVFP4 (W4A4) via TensorRT-Model-Optimizer PTQ
+(`scripts/quantize_nvfp4.py`, 512×512-token cnn_dailymail calibration), served by **vLLM 0.18 +
+flashinfer 0.6.6** on a single RTX PRO 6000 Blackwell Max-Q, against BF16 and FP8 (on-the-fly)
+baselines on the same card, same serving config (`scripts/serve_vllm_sm120.sh`), same 256-token
+sweep. vLLM's startup log confirms the **native FP4 path**:
+`Using NvFp4LinearBackend.FLASHINFER_CUTLASS for NVFP4 GEMM` — *not* the Marlin
+dequantization fallback (this is what makes the test meaningful; environment details and the
+log line are committed in `results/sm120_environment.txt`).
+
+| concurrency | BF16 tok/s | FP8 tok/s | NVFP4 tok/s | **NVFP4/BF16 (measured)** | published target |
+|---|---|---|---|---|---|
+| 1 | 86 | 148 | 139 | 1.61× | — |
+| 4 | 364 | 588 | 541 | 1.49× | — |
+| 16 | 1,298 | 2,213 | 2,257 | 1.74× | — |
+| 32 | 2,140 | 3,945 | 4,139 | 1.93× | — |
+| 64 | 3,154 | 7,081 | 7,938 | **2.52×** | ~1.77–2.1× |
+| 128 | 6,019 | 10,096 | 12,817 | **2.13×** | ~1.77–2.1× |
+
+![NVFP4 vs BF16/FP8 on sm_120](results/pareto_sm120.png)
+
+**The published number reproduces — and is exceeded at high concurrency** (2.13–2.52× vs the
+published ~1.77–2.1×). Reading the sweep:
+
+- **NVFP4's win grows with concurrency** (1.61× → 2.13×): at c1 decode is weight-bandwidth-bound
+  (4-bit weights ≈ FP8's win over BF16), but as the batch grows the workload turns
+  compute-bound — and that is where W4A4's FP4 *Tensor Core math* (not just smaller weights)
+  pulls away from FP8 (NVFP4/FP8 climbs from 0.94× at c1 to **1.27×** at c128).
+- **Below c16, FP8 beats NVFP4** (0.92–0.94×). NVFP4's per-token activation quantization
+  overhead isn't free; it only pays off once there is enough math to amortize it. Deployment
+  guidance mirrors study 9's: **NVFP4 for throughput-oriented replicas (c≥16), FP8 for
+  latency-oriented ones.**
+- **Accuracy spot-check** (ARC-Challenge 300-question subset, generation-based MC through the
+  same serving endpoint): BF16 **0.830**, FP8 **0.847**, NVFP4 **0.800**. The NVFP4 delta
+  (−3.0 pp) is ~1.4σ for n=300 — consistent with the published "near-parity" claim
+  (NVIDIA reports ≤1–2% on MMLU/GPQA-class evals), but it is a real trend, not noise-free
+  parity; a full eval (not a spot-check) would be needed to pin it down.
+- Caveats, stated honestly: this card is the **Max-Q (300 W)** variant and the serving stack
+  runs vLLM's no-compile + decode-CUDA-graph workaround (torch.compile is broken on this
+  vLLM/torch combination — `results/sm120_environment.txt`), so **absolute** tok/s are not
+  comparable to the H100 studies above or to published absolute numbers; every **ratio** is
+  measured under identical conditions on one card. The BF16 c64 point (3,154) is the softest
+  number in the table — its ITL jumps to c128 levels; treating c128 as the high-concurrency
+  read-out, the conclusion is unchanged.
+
 ### Verification & cross-validation
 
 - **Roofline** (`bench/roofline_check.py`): all corrected c1 numbers land at **36–56 % of the
@@ -309,16 +364,19 @@ running below ~c32 (≥2× win); it is merely neutral by c≈128.**
 Personal project for learning and benchmarking. Views and results are my own and do not represent any employer.
 
 ## Status
-**Nine measured studies complete** — studies 1–8 under a controlled 256-token methodology,
+**Ten measured studies complete** — studies 1–8 under a controlled 256-token methodology,
 study 9 (spec decode vs concurrency) under a 200-token methodology (its speedup ratios are
-internally consistent; its absolute tok/s are not directly comparable to studies 1–8) — with
+internally consistent; its absolute tok/s are not directly comparable to studies 1–8), and
+study 10 (NVFP4, 256-token methodology on sm_120) — with
 TRT-LLM CUDA graphs correctly enabled and **every concurrency-1 number roofline-verified** (36–56% of
 the TP-aggregate HBM ceiling, nothing implausible): cross-model (Llama-3.1-8B / Qwen3-8B /
 Qwen3.5-9B), FP8 and BF16 head-to-heads (Llama-3.1-8B, TP=2), big-model head-to-head
 (Qwen2.5-32B, TP=4), FP8/BF16 quantization (Qwen3-8B), **tuned-vs-tuned** (chunked prefill +
 `MAX_UTILIZATION`), **compiled engine vs PyTorch backend** (+ Triton `tensorrt_llm`-backend
-deployment, deployed and measured), batch=1 speculative decoding, and **speculative decoding
-under concurrency**.
+deployment, deployed and measured), batch=1 speculative decoding, **speculative decoding
+under concurrency**, and **NVFP4 W4A4 serving on RTX PRO 6000 Blackwell** (the published
+~1.77× over BF16 reproduced at 2.13–2.52×, native FLASHINFER_CUTLASS FP4 kernels, accuracy
+spot-checked).
 
 Headline: **TRT-LLM+CUDA-graph wins low/mid concurrency (latency) — FP8 c1 374 vs 300 tok/s;
 vLLM wins high concurrency (throughput) — c128 22.8k vs 13.8k.** The high-concurrency deficit
@@ -328,7 +386,7 @@ in TRT-LLM 0.20 for decode-heavy short-prompt serving. The journey — catching 
 CUDA-graph mis-config with a physics check, then killing two plausible explanations with
 controlled experiments — is the portfolio point.
 
-Remaining (roadmap): FP8 KV-cache study, genai-perf cross-check of the custom harness,
-draft-model (EAGLE-class) speculative decoding, multi-node. Note: TRT-LLM 0.20's
-compiled-engine path supports Llama-3.x / Qwen2.x; Qwen3 / Llama-4 run on its PyTorch backend
-or vLLM.
+Remaining (roadmap): NVIDIA perf-overview 26.4k tok/s waterfall attribution (Phase 6),
+FP8 KV-cache study, genai-perf cross-check of the custom harness, draft-model (EAGLE-class)
+speculative decoding, multi-node. Note: TRT-LLM 0.20's compiled-engine path supports
+Llama-3.x / Qwen2.x; Qwen3 / Llama-4 run on its PyTorch backend or vLLM.

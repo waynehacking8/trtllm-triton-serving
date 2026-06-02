@@ -127,17 +127,29 @@ repo's own harness and hardware.
     is an attributed loss. This converts "we only reach 53% of the published ceiling" into a
     reproducibility analysis of what the published ceiling actually measures.
 
-- [ ] **NVFP4 W4A4 serving on RTX PRO 6000 (sm_120).**
+- [x] **NVFP4 W4A4 serving on RTX PRO 6000 (sm_120). DONE — README study 10 / report study 9.**
   Published target: ~1.77–2.1× over BF16 at high concurrency, accuracy parity on GPQA/ARC
   (NVIDIA NVFP4 / Jarvis Labs).
   - **Question:** all serving numbers in this repo are Hopper. Does NVFP4 quantized serving
     deliver the published speedup on a Blackwell workstation card — the first sm_120 data
     point in this repo?
-  - **Method:** quantize Llama-3.1-8B to NVFP4 with TensorRT-Model-Optimizer (or llm-compressor);
-    serve with vLLM on the RTX PRO 6000; run the existing sweep (c1→c128, 256-token decode);
-    spot-check accuracy (GPQA or ARC subset) vs the BF16 baseline.
-  - **Read-out:** tok/s + TTFT vs BF16/FP8 on the same card + accuracy delta table. Adds the
-    new-hardware / new-precision axis the repo currently lacks.
+  - **Method (as run):** Llama-3.1-8B-Instruct → NVFP4 W4A4 via TensorRT-Model-Optimizer PTQ
+    (`scripts/quantize_nvfp4.py`, 512-sample cnn_dailymail calibration); served with vLLM 0.18 +
+    flashinfer 0.6.6 on the RTX PRO 6000 (`scripts/serve_vllm_sm120.sh`, TP=1; no-compile +
+    decode-CUDA-graph workaround documented in `results/sm120_environment.txt`); existing sweep
+    (c1→c128, 256-token decode) against BF16 and FP8 baselines on the same card; ARC-Challenge
+    300-question spot-check (`bench/accuracy_mc.py`; GPQA is HF-gated, roadmap allowed either).
+  - **Result: the published speedup reproduces — and is exceeded at high concurrency.**
+    NVFP4/BF16 = 1.61× (c1) → 1.74× (c16) → 1.93× (c32) → **2.52× (c64) → 2.13× (c128)** vs the
+    published ~1.77–2.1×. Crucially, vLLM selected the **native FP4 path**
+    (`NvFp4LinearBackend.FLASHINFER_CUTLASS`, logged in `results/sm120_environment.txt`) — not
+    the Marlin dequant fallback — so this is real 5th-gen Tensor Core FP4 math. Two findings on
+    top of the headline: (a) **below c16, FP8 beats NVFP4** (0.92–0.94×; activation-quant
+    overhead not yet amortized) — precision choice is concurrency-dependent; (b) accuracy
+    spot-check: BF16 0.830 / FP8 0.847 / **NVFP4 0.800** (−3.0 pp, ~1.4σ at n=300) — consistent
+    with published near-parity but a real downward trend, flagged for a full-eval follow-up.
+    Raw data: `results/vllm_sm120_{bf16,fp8,nvfp4}-c*.json`, `results/acc_arc_sm120_*.json`,
+    chart `results/pareto_sm120.png`.
 
 - [ ] **Candidates (spec on demand):** EAGLE-3 speculative decoding (published +38% at batch=64,
   arXiv:2503.01840 — directly extends study 9's n-gram curve, which decays to 1.18× there);
