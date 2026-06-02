@@ -107,5 +107,42 @@ answers, the exact method, and how to read the result.
     re-run `bash bench/sweep.sh` for all tags.
   - **Read-out:** every JSON becomes self-describing.
 
+## Phase 6 — Literature-ceiling reproductions (specified)
+
+Goal: turn published serving-performance claims into measured, attributed results from this
+repo's own harness and hardware.
+
+- [ ] **NVIDIA perf-overview 26,401 tok/s: per-knob waterfall attribution.**
+  Published target: Llama-3.1-8B FP8, 1×H100 SXM, ISL/OSL 128/128, TP=1, kv_cache_free_gpu_mem_fraction=0.95.
+  - **Question:** this repo's best TRT-LLM number (13.8k tok/s, c128, 256-token decode, TP=2,
+    kv 0.8) is 53% of NVIDIA's published 26,401. How much of that gap is methodology
+    (ISL/OSL 128/128 vs our decode-256, TP=1 vs TP=2, kv 0.95 vs 0.8, prefill-heavy vs
+    decode-heavy) and how much is real? Community report (TRT-LLM issue #6294) only reached
+    7,099 on PCIe H100 — so the published number is not trivially reproducible.
+  - **Method:** on 1 idle H100: first replicate NVIDIA's exact config (trtllm-bench or
+    genai-perf, 128/128 synthetic, TP=1, kv 0.95, large CUDA-graph batch list) and try to hit
+    ~26k. Then change ONE knob at a time toward this repo's methodology: OSL 128→256 →
+    kv 0.95→0.8 → TP 1→2 → real-prompt workload. Record tok/s after each step.
+  - **Read-out:** a waterfall chart decomposing 26,401 → (our methodology's number). Each bar
+    is an attributed loss. This converts "we only reach 53% of the published ceiling" into a
+    reproducibility analysis of what the published ceiling actually measures.
+
+- [ ] **NVFP4 W4A4 serving on RTX PRO 6000 (sm_120).**
+  Published target: ~1.77–2.1× over BF16 at high concurrency, accuracy parity on GPQA/ARC
+  (NVIDIA NVFP4 / Jarvis Labs).
+  - **Question:** all serving numbers in this repo are Hopper. Does NVFP4 quantized serving
+    deliver the published speedup on a Blackwell workstation card — the first sm_120 data
+    point in this repo?
+  - **Method:** quantize Llama-3.1-8B to NVFP4 with TensorRT-Model-Optimizer (or llm-compressor);
+    serve with vLLM on the RTX PRO 6000; run the existing sweep (c1→c128, 256-token decode);
+    spot-check accuracy (GPQA or ARC subset) vs the BF16 baseline.
+  - **Read-out:** tok/s + TTFT vs BF16/FP8 on the same card + accuracy delta table. Adds the
+    new-hardware / new-precision axis the repo currently lacks.
+
+- [ ] **Candidates (spec on demand):** EAGLE-3 speculative decoding (published +38% at batch=64,
+  arXiv:2503.01840 — directly extends study 9's n-gram curve, which decays to 1.18× there);
+  FP8 KV-cache (published ~1.45× decode-heavy); SGLang as a third engine (published ~29% over
+  vLLM on shared-prefix workloads).
+
 ## Out of scope (for now)
 - Multi-node (NCCL over InfiniBand) — see the `nccl-collectives-bench` repo first.
