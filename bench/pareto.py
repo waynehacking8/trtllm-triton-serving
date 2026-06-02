@@ -9,6 +9,7 @@ correctly-applied CUDA-graph config — see README "verification" note):
   5. Quantization (Qwen3-8B vLLM TP=2)       — FP8 vs BF16
   6. Tuned-vs-tuned (Llama-3.1-8B FP8 TP=2)  — TRT-LLM defaults vs +chunked-prefill+MAX_UTILIZATION
   7. Compiled engine vs PyTorch backend (Llama-3.1-8B BF16 TP=2)
+  9. NVFP4 W4A4 vs BF16/FP8 (Llama-3.1-8B, vLLM TP=1, RTX PRO 6000 sm_120)  [first non-Hopper data]
 
 All requests decode exactly 256 tokens (ignore_eos). Consumes results/<tag>-c<N>.json.
 """
@@ -24,6 +25,8 @@ LABEL = {
     "trtllm_llama31_fp8_tuned": "TRT-LLM tuned (chunked prefill + MAX_UTIL)",
     "trtllm_compiled_bf16": "TRT-LLM compiled engine",
     "trtllm_compiled_bf16_cg": "TRT-LLM compiled engine + CUDA graphs",
+    "vllm_sm120_bf16": "vLLM BF16 (sm_120)", "vllm_sm120_fp8": "vLLM FP8 (sm_120)",
+    "vllm_sm120_nvfp4": "vLLM NVFP4 W4A4 (sm_120)",
 }
 GROUP_A = ["xm_qwen3_8b", "xm_qwen35_9b", "xm_llama31_8b"]
 GROUP_B = ["trtllm_llama31", "vllm_llama31"]
@@ -32,6 +35,11 @@ GROUP_D = ["trtllm_qwen25_32b", "vllm_qwen25_32b"]
 GROUP_C = ["vllm_bf16", "vllm_fp8"]
 GROUP_TUNED = ["trtllm_llama31_fp8", "trtllm_llama31_fp8_tuned", "vllm_llama31_fp8"]
 GROUP_ENGINE = ["trtllm_llama31", "trtllm_compiled_bf16", "trtllm_compiled_bf16_cg", "vllm_llama31"]
+GROUP_SM120 = ["vllm_sm120_bf16", "vllm_sm120_fp8", "vllm_sm120_nvfp4"]
+# accuracy spot-check JSONs (bench/accuracy_mc.py) paired with the sm_120 sweep tags
+ACC_SM120 = {"vllm_sm120_bf16": "results/acc_arc_sm120_bf16.json",
+             "vllm_sm120_fp8": "results/acc_arc_sm120_fp8.json",
+             "vllm_sm120_nvfp4": "results/acc_arc_sm120_nvfp4.json"}
 
 
 def load_sweeps():
@@ -230,6 +238,46 @@ def main():
           "merely neutral by c≈128.\n")
         w("![spec decode vs concurrency](spec_concurrency.png)\n")
 
+    if any(t in runs for t in GROUP_SM120):
+        w("## 9. NVFP4 W4A4 vs BF16/FP8 — Llama-3.1-8B, vLLM TP=1, RTX PRO 6000 Blackwell (sm_120)\n")
+        w("The repo's first non-Hopper data point (roadmap Phase 6 literature-ceiling item). "
+          "Llama-3.1-8B-Instruct quantized to **NVFP4 (W4A4)** with TensorRT-Model-Optimizer "
+          "(`scripts/quantize_nvfp4.py`), served by vLLM on a single RTX PRO 6000 Blackwell "
+          "Max-Q, vs the BF16 and FP8 (on-the-fly) baselines on the same card "
+          "(`scripts/serve_vllm_sm120.sh` — compilation off / full decode CUDA graphs, the "
+          "documented sm_120 workaround, identical for every precision). "
+          "**Published target being tested: ~1.77-2.1x over BF16 at high concurrency** "
+          "(NVIDIA NVFP4 blog / Jarvis Labs, measured on B200/RTX PRO with native FP4 kernels).\n")
+        sweep_table(w, runs, GROUP_SM120)
+        bf = {r["concurrency"]: r for r in runs.get("vllm_sm120_bf16", [])}
+        fp = {r["concurrency"]: r for r in runs.get("vllm_sm120_fp8", [])}
+        nv = {r["concurrency"]: r for r in runs.get("vllm_sm120_nvfp4", [])}
+        if bf and nv:
+            w("| concurrency | BF16 tok/s | FP8 tok/s | NVFP4 tok/s | NVFP4/BF16 | published NVFP4/BF16 |")
+            w("|---|---|---|---|---|---|")
+            for c in sorted(set(bf) & set(nv)):
+                b, n = bf[c]["throughput_tok_s"], nv[c]["throughput_tok_s"]
+                f = fp.get(c, {}).get("throughput_tok_s")
+                w(f"| {c} | {b:.0f} | {f:.0f} | {n:.0f} | **{n/b:.2f}x** | ~1.77x |"
+                  if f is not None else
+                  f"| {c} | {b:.0f} | — | {n:.0f} | **{n/b:.2f}x** | ~1.77x |")
+            w("")
+        # accuracy spot-check table (bench/accuracy_mc.py results)
+        accs = {t: json.load(open(p)) for t, p in ACC_SM120.items() if os.path.exists(p)}
+        if accs:
+            w("**Accuracy spot-check** (ARC-Challenge subset, generation-based MC via the "
+              "serving endpoint — only the delta between precisions is meaningful):\n")
+            w("| precision | ARC-Challenge accuracy | n | delta vs BF16 |")
+            w("|---|---|---|---|")
+            base_acc = accs.get("vllm_sm120_bf16", {}).get("accuracy")
+            for t in GROUP_SM120:
+                if t in accs:
+                    a = accs[t]
+                    d = (f"{a['accuracy'] - base_acc:+.4f}"
+                         if base_acc is not None and t != "vllm_sm120_bf16" else "—")
+                    w(f"| {LABEL[t]} | {a['accuracy']:.4f} | {a['n']} | {d} |")
+            w("")
+
     os.makedirs("results", exist_ok=True)
     open("results/report.md", "w").write("\n".join(L) + "\n")
     print("wrote results/report.md")
@@ -239,6 +287,8 @@ def main():
     _plot(runs, GROUP_A, "pareto_models.png", "Cross-model — vLLM TP=1")
     _plot(runs, GROUP_TUNED, "pareto_tuned.png", "TRT-LLM defaults vs tuned vs vLLM — FP8 TP=2")
     _plot(runs, GROUP_ENGINE, "pareto_engine.png", "Compiled engine vs PyTorch backend — BF16 TP=2")
+    _plot(runs, GROUP_SM120, "pareto_sm120.png",
+          "NVFP4 W4A4 vs BF16/FP8 — Llama-3.1-8B, RTX PRO 6000 (sm_120)")
 
 
 def _plot(runs, tags, fname, title):
