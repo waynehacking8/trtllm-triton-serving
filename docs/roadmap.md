@@ -1,6 +1,6 @@
 # Roadmap
 
-The phases below double as the list of interview talking points that have empirical
+The phases below double as the list of key technical claims that have empirical
 evidence in this repo. Unchecked = not yet run/verified.
 
 ## Phase 1 — Single-model TP=4 serving
