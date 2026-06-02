@@ -83,6 +83,19 @@ answers, the exact method, and how to read the result.
   - **Read-out:** plot speedup vs concurrency; find the ≤1.0× crossover → complete usage
     guidance: "enable spec decode for RAG-style workloads below concurrency X, disable above".
 
+- [ ] **Triton ensemble path: full concurrency sweep** (currently c1 smoke only, ~187 tok/s).
+  - **Question:** the ~15% ensemble overhead vs `trtllm-serve` was measured at c1 only. Under
+    concurrency, does the Python pre/post-processing hop amortize (fixed cost spread over more
+    requests) or become the bottleneck (GIL / single-instance preprocessing serializes)?
+  - **Method:** serve via `scripts/serve_triton.sh`; run the existing sweep against the Triton
+    OpenAI-compatible frontend (or genai-perf against the ensemble endpoint) for c1→c128, tag
+    `trtllm_triton_bf16`; commit the JSONs (closes the smoke-only caveat noted in README
+    study 8).
+  - **Read-out:** overhead vs `trtllm-serve` at each concurrency. Amortizes to <5% by c32 →
+    the ensemble path is fine for throughput serving, only latency-sensitive paths need BLS /
+    the OpenAI frontend. Grows with concurrency → quantifies why production deployments bypass
+    the Python ensemble.
+
 - [x] **bench.py: write the model field into output JSON.** **DONE.** bench.py now writes
   `model` into every result JSON; sweep.sh passes the served model name through. All new-run
   JSONs (tuned, compiled, spec-concurrency) are self-describing; pre-existing JSONs keep their
