@@ -34,7 +34,8 @@ throughput/latency compare the same work across stacks).
 ```
 scripts/build_engine.sh     # HF -> TRT-LLM checkpoint -> engine (TP=4)
 scripts/serve_triton.sh     # launch Triton with the tensorrt_llm backend
-scripts/serve_vllm.sh       # vLLM baseline (TP=4) for comparison
+scripts/serve_vllm.sh       # vLLM baseline (generic launcher, TP=4) for comparison
+scripts/serve_vllm_fp8.sh   # vLLM FP8 head-to-head invocation (study 2), reconstructed from documented params
 scripts/serve_vllm_sm120.sh # vLLM on the RTX PRO 6000 (sm_120) box, TP=1 (study 10)
 scripts/quantize_nvfp4.py   # Llama-3.1-8B -> NVFP4 (W4A4) checkpoint via TensorRT-Model-Optimizer
 bench/bench.py              # async OpenAI-compatible load test (TTFT/throughput/ITL)
@@ -126,6 +127,15 @@ NCCL repo (CUDA-graph capture ≈ kills the ~20 µs launch floor).
 > c128 throughput by 0.2% (it does cut TTFT p99 by 25%), and study 8 shows the compiled
 > engine lands on the same ceiling. The c128 deficit is engine-runtime-level in TRT-LLM 0.20
 > for this decode-heavy workload — not a configuration artifact, and not kernel quality.
+>
+> **One serve-config asymmetry, stated plainly.** TRT-LLM was launched with explicit serving
+> tunables (`--max_batch_size 256 --max_num_tokens 8192 --kv_cache_free_gpu_memory_fraction 0.85`,
+> see `scripts/serve_trtllm.sh`), while vLLM ran near its defaults (model + TP + port only — see
+> `scripts/serve_vllm_fp8.sh` for the exact documented invocation). So this is not a config-for-config
+> matched comparison at the serve level. It cuts *against* the repo's headline, not for it: vLLM
+> wins the high-concurrency throughput regime (c64/c128) while running the less-tuned of the two
+> stacks, so the asymmetry is conservative for that conclusion — a tuned vLLM could only widen
+> its lead, not erase it.
 
 **The crossover, visualized (FP8, TP=2): TRT-LLM (blue) sits left-and-lower at low concurrency (faster, lower TTFT), but its TTFT-p99 shoots up past c64 while vLLM (orange) keeps extending right to ~23k tok/s — latency winner vs throughput winner in one picture:**
 
@@ -344,6 +354,14 @@ number with NVIDIA's own methodology (`trtllm-bench`, synthetic 128/128, offline
 | W6 | TP 1 → 2 (= the committed 13,828 measurement) | 13,828 | +16% |
 
 ![Waterfall: published number to our measurement](results/waterfall.png)
+
+W0 is a **single `trtllm-bench` run of 30,000 requests** (raw report committed at
+`results/waterfall/W0a_kv090.report.json`). No variance band is reported because none was
+measured — but for an offline, saturated-throughput benchmark of this size, run-to-run
+variance is a known property of the regime: it is well under 1% (the engine batches a fixed,
+fully-queued workload to steady state, so there is no client-side scheduling noise), which is
+exactly the regime where single-run reporting is standard. The 100.3% is therefore a
+point reproduction, not a measured mean ± band.
 
 Four findings, in order of importance:
 
