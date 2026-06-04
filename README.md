@@ -114,7 +114,11 @@ is future work) vs vLLM:
 **low/mid-concurrency (latency) regime** — at c1 it's 1.25× faster (374 vs 300, ITL 2.6 vs
 3.0 ms) because CUDA-graph decode removes the per-step launch tax that dominates single-stream;
 vLLM wins the **high-concurrency (throughput) regime** where its scheduler/batching scales
-better. Enabling CUDA graphs alone took TRT-LLM from 162→374 tok/s (**2.3×**) — a direct,
+better.
+
+> c=1 measurements use n=8 requests; percentile values should be interpreted with caution at this sample size.
+
+Enabling CUDA graphs alone took TRT-LLM from 162→374 tok/s (**2.3×**) — a direct,
 independent confirmation of the [latency-wall study](../nccl-collectives-bench) in the sibling
 NCCL repo (CUDA-graph capture ≈ kills the ~20 µs launch floor).
 
@@ -375,6 +379,7 @@ Four findings, in order of importance:
 3. **The serving stack costs another −48%**: HTTP streaming + per-request scheduling +
    the serve-tuned config (max_batch 256 vs 2048). Offline `trtllm-bench` and `trtllm-serve`
    are different tools measuring different things.
+   > **Note**: W4→W5 changes three knobs simultaneously (offline bench → HTTP streaming, max_batch_size 2048→256, kv_cache_fraction 0.80→0.85). The −48% cannot be cleanly decomposed into these contributors.
 4. **The repo's workload shape is *favorable*, not adversarial** — short prompts and 256-token
    decodes are worth +66% offline (W1+W2). The deficit never came from the workload.
 
