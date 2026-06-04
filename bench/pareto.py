@@ -42,9 +42,11 @@ GROUP_SM120 = ["vllm_sm120_bf16", "vllm_sm120_fp8", "vllm_sm120_nvfp4"]
 # Triton ensemble vs the same compiled engine through trtllm-serve (study 12)
 GROUP_TRITON = ["trtllm_triton_bf16", "trtllm_compiled_bf16", "trtllm_compiled_bf16_cg"]
 # accuracy spot-check JSONs (bench/accuracy_mc.py) paired with the sm_120 sweep tags
-ACC_SM120 = {"vllm_sm120_bf16": "results/acc_arc_sm120_bf16.json",
-             "vllm_sm120_fp8": "results/acc_arc_sm120_fp8.json",
-             "vllm_sm120_nvfp4": "results/acc_arc_sm120_nvfp4.json"}
+ACC_SM120 = {
+    "vllm_sm120_bf16": str(_REPO / "results" / "acc_arc_sm120_bf16.json"),
+    "vllm_sm120_fp8": str(_REPO / "results" / "acc_arc_sm120_fp8.json"),
+    "vllm_sm120_nvfp4": str(_REPO / "results" / "acc_arc_sm120_nvfp4.json"),
+}
 
 
 def load_sweeps():
@@ -223,8 +225,9 @@ def main():
           "trtllm-serve) — the ensemble's Python pre/post-processing hop; see "
           "`scripts/setup_triton_repo.sh`.\n")
 
-    if os.path.exists("results/spec_concurrency.json"):
-        with open(str(_REPO / "results" / "spec_concurrency.json")) as fh:
+    _sc = _REPO / "results" / "spec_concurrency.json"
+    if _sc.exists():
+        with open(_sc) as fh:
             sc = json.load(fh)
         w("## 8. Speculative decoding under concurrency — where does the benefit end?\n")
         w(f"n-gram (prompt-lookup) speculative decoding, {sc['model']}, extractive/RAG-style "

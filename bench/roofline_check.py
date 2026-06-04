@@ -15,6 +15,9 @@ are a red flag to debug, not to publish.
 
 H100 SXM5 HBM3: ~3.35 TB/s per GPU.
 """
+import pathlib
+_REPO = pathlib.Path(__file__).resolve().parent.parent
+
 HBM_TBS = 3.35  # TB/s per H100 SXM5
 
 # (label, params_billions, bytes_per_param, n_gpu)
@@ -39,7 +42,7 @@ def roofline(params_b, bytes_pp, n_gpu):
 
 
 def load_measured():
-    import json, os
+    import json
     m = {
         "Llama-3.1-8B BF16, TP=2": {"TRT-LLM+CG": "trtllm_llama31", "vLLM": "vllm_llama31",
                                     "TRT compiled engine": "trtllm_compiled_bf16",
@@ -50,8 +53,8 @@ def load_measured():
     }
     for label, engines in m.items():
         for engine, tag in engines.items():
-            p = f"results/{tag}-c1.json"
-            if os.path.exists(p):
+            p = _REPO / "results" / f"{tag}-c1.json"
+            if p.exists():
                 with open(p) as fh:
                     MEASURED[label][engine] = json.load(fh)["throughput_tok_s"]
 
