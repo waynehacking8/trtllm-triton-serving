@@ -55,7 +55,8 @@ def parse_bench_txt(path):
     rj = path.replace(".txt", ".report.json")
     if os.path.exists(rj):
         try:
-            d = json.load(open(rj))
+            with open(rj) as fh:
+                d = json.load(fh)
             # 0.20 report schema: nested under "performance" or top-level keys
             for k in ("total_output_throughput_tok_s", "output_throughput_tok_s"):
                 if k in d:
@@ -66,7 +67,8 @@ def parse_bench_txt(path):
                     return float(perf[k])
         except (json.JSONDecodeError, ValueError):
             pass
-    txt = open(path, errors="replace").read()
+    with open(path, errors="replace") as fh:
+        txt = fh.read()
     m = re.search(r"Total Output Throughput \(tokens/sec\):\s*([\d.]+)", txt)
     return float(m.group(1)) if m else None
 
@@ -81,14 +83,16 @@ def main():
     # W5: trtllm-serve TP1 measured by the repo's own client harness (same workload shape)
     w5_path = os.path.join(WF_DIR, W5_SERVE_TP1)
     if os.path.exists(w5_path):
-        w5 = json.load(open(w5_path))
+        with open(w5_path) as fh:
+            w5 = json.load(fh)
         rows.append({"tag": "W5_serve_tp1", "label": "W5: serving stack\n(trtllm-serve, TP1)",
                      "knob": "offline bench harness -> HTTP streaming serving "
                              "(serve config: max_batch 256, kv 0.85, CG-256, chunked prefill)",
                      "tok_s": w5["throughput_tok_s"]})
 
     # W6: the repo's committed serving measurement (TP2)
-    serving = json.load(open(os.path.join(REPO, "results", "trtllm_llama31_fp8_tuned-c128.json")))
+    with open(os.path.join(REPO, "results", "trtllm_llama31_fp8_tuned-c128.json")) as fh:
+        serving = json.load(fh)
     rows.append({"tag": "W6_serve_tp2", "label": "W6: TP 1 -> 2\n(committed measurement)",
                  "knob": "tensor parallelism 1 -> 2 in serving (trtllm-bench TP2 is broken in "
                          "0.20 - see W4_tp2.txt)",
@@ -112,6 +116,10 @@ def main():
     print(f"\npublished references: {PUBLISHED_020:,.2f} (release/0.20 docs) / "
           f"{PUBLISHED_CUR:,.2f} (current docs)")
     print(f"W0 reaches {w0 / PUBLISHED_020 * 100:.0f}% of the 0.20-docs number\n")
+    print("**Caveat — W4→W5 changes three knobs simultaneously** (offline→HTTP serving stack, "
+          "max_batch_size 2048→256, kv_cache_free_gpu_mem_fraction 0.80→0.85); the −48% "
+          "attributed to 'serving stack' cannot be cleanly decomposed into individual "
+          "contributions without additional single-knob runs.\n")
 
     # ---- waterfall chart ----
     fig, ax = plt.subplots(figsize=(12, 6))

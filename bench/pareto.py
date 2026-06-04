@@ -13,8 +13,10 @@ correctly-applied CUDA-graph config — see README "verification" note):
 
 All requests decode exactly 256 tokens (ignore_eos). Consumes results/<tag>-c<N>.json.
 """
-import glob, json, os, re
+import glob, json, os, pathlib, re
 from collections import defaultdict
+
+_REPO = pathlib.Path(__file__).resolve().parent.parent
 
 LABEL = {
     "xm_qwen3_8b": "Qwen3-8B", "xm_qwen35_9b": "Qwen3.5-9B", "xm_llama31_8b": "Llama-3.1-8B",
@@ -47,12 +49,13 @@ ACC_SM120 = {"vllm_sm120_bf16": "results/acc_arc_sm120_bf16.json",
 
 def load_sweeps():
     runs = defaultdict(list)
-    for f in glob.glob("results/*-c*.json"):
+    for f in glob.glob(str(_REPO / "results" / "*-c*.json")):
         m = re.match(r"(.+)-c(\d+)\.json", os.path.basename(f))
         if not m:
             continue
         tag, c = m.group(1), int(m.group(2))
-        d = json.load(open(f)); d["concurrency"] = c
+        with open(f) as fh:
+            d = {**json.load(fh), "concurrency": c}
         runs[tag].append(d)
     for t in runs:
         runs[t].sort(key=lambda r: r["concurrency"])
@@ -89,8 +92,14 @@ def h2h(w, runs, trt, vl, title, blurb):
             a, b = tr[c]["throughput_tok_s"], vv[c]["throughput_tok_s"]
             r = a / b if b else 0
             win = "TRT-LLM" if r > 1.02 else ("vLLM" if r < 0.98 else "tie")
-            w(f"| {c} | {a:.0f} | {b:.0f} | {r:.2f}× | {win} |")
+            n_note = " (n=8, interpret with caution)" if c == 1 else ""
+            w(f"| {c} | {a:.0f} | {b:.0f} | {r:.2f}×{n_note} | {win} |")
         w("")
+        w("*Note: c=1 rows are based on n=8 requests — p99 latency at this sample size has "
+          "high variance and should be interpreted with caution.*\n")
+        w("*Note: vLLM was run with default serve settings while TRT-LLM had explicit config "
+          "tuning (`extra_llm_api_options`); the low-concurrency TRT-LLM advantage could narrow "
+          "under a comparably tuned vLLM config.*\n")
 
 
 def main():
@@ -215,7 +224,8 @@ def main():
           "`scripts/setup_triton_repo.sh`.\n")
 
     if os.path.exists("results/spec_concurrency.json"):
-        sc = json.load(open("results/spec_concurrency.json"))
+        with open(str(_REPO / "results" / "spec_concurrency.json")) as fh:
+            sc = json.load(fh)
         w("## 8. Speculative decoding under concurrency — where does the benefit end?\n")
         w(f"n-gram (prompt-lookup) speculative decoding, {sc['model']}, extractive/RAG-style "
           "task, non-streaming (see `bench/spec_concurrency.py`). The batch=1 study showed "
@@ -266,7 +276,11 @@ def main():
                   f"| {c} | {b:.0f} | — | {n:.0f} | **{n/b:.2f}x** | ~1.77x |")
             w("")
         # accuracy spot-check table (bench/accuracy_mc.py results)
-        accs = {t: json.load(open(p)) for t, p in ACC_SM120.items() if os.path.exists(p)}
+        accs = {}
+        for t, p in ACC_SM120.items():
+            if os.path.exists(p):
+                with open(p) as fh:
+                    accs[t] = json.load(fh)
         if accs:
             w("**Accuracy spot-check** (ARC-Challenge subset, generation-based MC via the "
               "serving endpoint — only the delta between precisions is meaningful):\n")
@@ -315,8 +329,9 @@ def main():
           "c1 ensemble overhead is ~0%, not ~15% — the 15% was mostly trtllm-serve's "
           "CUDA-graph advantage, which the C++ tensorrt_llm backend doesn't have.\n")
 
-    os.makedirs("results", exist_ok=True)
-    open("results/report.md", "w").write("\n".join(L) + "\n")
+    os.makedirs(str(_REPO / "results"), exist_ok=True)
+    with open(str(_REPO / "results" / "report.md"), "w") as fh:
+        fh.write("\n".join(L) + "\n")
     print("wrote results/report.md")
     _plot(runs, GROUP_FP8, "pareto_fp8.png", "FP8 head-to-head — Llama-3.1-8B TP=2")
     _plot(runs, GROUP_B, "pareto_h2h.png", "BF16 head-to-head — Llama-3.1-8B TP=2")
@@ -370,8 +385,9 @@ def _plot(runs, tags, fname, title):
     # lower right is always empty on a throughput-vs-TTFT pareto (curves rise to the right)
     ax.legend(framealpha=1.0, loc="lower right")
     ax.grid(True, alpha=0.3); ax.grid(True, alpha=0.12, which="minor")
-    fig.tight_layout(); fig.savefig(f"results/{fname}", dpi=130); plt.close(fig)
-    print(f"wrote results/{fname}")
+    out = str(_REPO / "results" / fname)
+    fig.tight_layout(); fig.savefig(out, dpi=130); plt.close(fig)
+    print(f"wrote {out}")
 
 
 if __name__ == "__main__":

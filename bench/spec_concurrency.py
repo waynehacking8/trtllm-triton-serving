@@ -96,8 +96,10 @@ def bench(base, model, tag):
 
 
 def report():
-    base = json.load(open(os.path.join(RESULTS_DIR, "spec_concurrency_baseline.json")))
-    spec = json.load(open(os.path.join(RESULTS_DIR, "spec_concurrency_ngram.json")))
+    with open(os.path.join(RESULTS_DIR, "spec_concurrency_baseline.json")) as fh:
+        base = json.load(fh)
+    with open(os.path.join(RESULTS_DIR, "spec_concurrency_ngram.json")) as fh:
+        spec = json.load(fh)
     rows = []
     for b, s in zip(base["rows"], spec["rows"]):
         assert b["concurrency"] == s["concurrency"]

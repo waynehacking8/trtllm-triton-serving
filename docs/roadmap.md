@@ -42,8 +42,9 @@ answers, the exact method, and how to read the result.
       use_cuda_graph: true
       cuda_graph_padding_enabled: true
       cuda_graph_max_batch_size: 256
-      enable_chunked_prefill: true        # default off (GitHub issue #4947)
-      scheduler_policy: MAX_UTILIZATION   # default GUARANTEED_NO_EVICT
+    enable_chunked_prefill: true          # TOP-LEVEL LlmArgs key (default off, GitHub issue #4947)
+    scheduler_config:
+      capacity_scheduler_policy: MAX_UTILIZATION  # TOP-LEVEL LlmArgs key (default GUARANTEED_NO_EVICT)
     ```
     Serve with `CFG=/models/trtllm_pytorch_tuned.yaml bash scripts/serve_trtllm.sh
     /models/Llama-3.1-8B-Instruct-FP8 2 8012`, **verify the settings actually took**

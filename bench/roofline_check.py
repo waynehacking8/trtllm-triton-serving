@@ -52,7 +52,8 @@ def load_measured():
         for engine, tag in engines.items():
             p = f"results/{tag}-c1.json"
             if os.path.exists(p):
-                MEASURED[label][engine] = json.load(open(p))["throughput_tok_s"]
+                with open(p) as fh:
+                    MEASURED[label][engine] = json.load(fh)["throughput_tok_s"]
 
 
 def main():

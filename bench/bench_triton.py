@@ -36,6 +36,9 @@ async def one_request(client, base, max_tokens, model):
         async for line in r.aiter_lines():
             if not line.startswith("data:"):
                 continue
+            payload = line[len("data:"):].strip()
+            if payload == "[DONE]" or not payload:
+                continue
             if first is None:
                 first = time.perf_counter()
             n += 1

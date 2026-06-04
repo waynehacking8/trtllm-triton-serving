@@ -42,12 +42,16 @@ Same model & precision (FP8, `nvidia/Llama-3.1-8B-Instruct-FP8`), TRT-LLM's PyTo
 
 | concurrency | TRT-LLM+CG tok/s | vLLM tok/s | ratio | winner |
 |---|---|---|---|---|
-| 1 | 374 | 300 | 1.25× | TRT-LLM |
+| 1 | 374 | 300 | 1.25× (n=8, interpret with caution) | TRT-LLM |
 | 4 | 1362 | 1291 | 1.05× | TRT-LLM |
 | 16 | 4856 | 4708 | 1.03× | TRT-LLM |
 | 32 | 9256 | 8809 | 1.05× | TRT-LLM |
 | 64 | 13919 | 15447 | 0.90× | vLLM |
 | 128 | 13802 | 22783 | 0.61× | vLLM |
+
+*Note: c=1 rows are based on n=8 requests — p99 latency at this sample size has high variance and should be interpreted with caution.*
+
+*Note: vLLM was run with default serve settings while TRT-LLM had explicit config tuning (`extra_llm_api_options`); the low-concurrency TRT-LLM advantage could narrow under a comparably tuned vLLM config.*
 
 ## 3. Head-to-head BF16 — Llama-3.1-8B, TP=2
 
@@ -77,12 +81,16 @@ Same as above, BF16. The two are ~tied at concurrency 1; vLLM's scheduler pulls 
 
 | concurrency | TRT-LLM+CG tok/s | vLLM tok/s | ratio | winner |
 |---|---|---|---|---|
-| 1 | 230 | 228 | 1.01× | tie |
+| 1 | 230 | 228 | 1.01× (n=8, interpret with caution) | tie |
 | 4 | 893 | 937 | 0.95× | vLLM |
 | 16 | 3069 | 3530 | 0.87× | vLLM |
 | 32 | 5748 | 6831 | 0.84× | vLLM |
 | 64 | 10614 | 12031 | 0.88× | vLLM |
 | 128 | 14194 | 19659 | 0.72× | vLLM |
+
+*Note: c=1 rows are based on n=8 requests — p99 latency at this sample size has high variance and should be interpreted with caution.*
+
+*Note: vLLM was run with default serve settings while TRT-LLM had explicit config tuning (`extra_llm_api_options`); the low-concurrency TRT-LLM advantage could narrow under a comparably tuned vLLM config.*
 
 ## 4. Head-to-head BF16 — Qwen2.5-32B, TP=4 (big model, 4 cards)
 
@@ -112,12 +120,16 @@ Same as above, BF16. The two are ~tied at concurrency 1; vLLM's scheduler pulls 
 
 | concurrency | TRT-LLM+CG tok/s | vLLM tok/s | ratio | winner |
 |---|---|---|---|---|
-| 1 | 114 | 113 | 1.01× | tie |
+| 1 | 114 | 113 | 1.01× (n=8, interpret with caution) | tie |
 | 4 | 449 | 463 | 0.97× | vLLM |
 | 16 | 1610 | 1738 | 0.93× | vLLM |
 | 32 | 2925 | 3276 | 0.89× | vLLM |
 | 64 | 5326 | 5826 | 0.91× | vLLM |
 | 128 | 5686 | 9383 | 0.61× | vLLM |
+
+*Note: c=1 rows are based on n=8 requests — p99 latency at this sample size has high variance and should be interpreted with caution.*
+
+*Note: vLLM was run with default serve settings while TRT-LLM had explicit config tuning (`extra_llm_api_options`); the low-concurrency TRT-LLM advantage could narrow under a comparably tuned vLLM config.*
 
 ## 5. Quantization — vLLM, Qwen3-8B, TP=2 (FP8 vs BF16)
 

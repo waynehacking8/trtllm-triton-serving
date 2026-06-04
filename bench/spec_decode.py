@@ -62,7 +62,8 @@ def plot(src="results/spec_decode.json", fname="results/spec_decode.png"):
         import numpy as np
     except Exception:
         return
-    d = json.load(open(src))
+    with open(src) as fh:
+        d = json.load(fh)
     rows = d["results"]
     # short labels for the x axis (first word before the parenthesis)
     tasks = [r["task"].split(" (")[0] for r in rows]
@@ -107,7 +108,8 @@ def main(base=BASE, spec=SPEC):
            "num_speculative_tokens": 5, "draft_acceptance_rate": round(acceptance(spec), 2),
            "results": rows}
     os.makedirs("results", exist_ok=True)
-    json.dump(out, open("results/spec_decode.json", "w"), indent=2)
+    with open("results/spec_decode.json", "w") as fh:
+        json.dump(out, fh, indent=2)
     print(json.dumps(out, indent=2))
     plot()
 

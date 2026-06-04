@@ -59,7 +59,7 @@ async def run(base, concurrency, total, max_tokens, model):
     # "model" makes every result JSON self-describing (data traceability) — without it,
     # attribution relies on the output filename alone.
     return {"model": model,
-            "concurrency": concurrency, "requests": total, "wall_s": round(wall, 3),
+            "concurrency": concurrency, "n": len(res), "requests": total, "wall_s": round(wall, 3),
             "throughput_tok_s": round(toks / wall, 1),
             "out_tokens_mean": round(toks / len(res), 1),
             "ttft_p50_s": round(pct(ttfts, 0.5), 4), "ttft_p99_s": round(pct(ttfts, 0.99), 4),
@@ -78,8 +78,11 @@ def main():
     ap.add_argument("--out", default="results/run.json")
     a = ap.parse_args()
     out = asyncio.run(run(a.base, a.concurrency, a.total, a.max_tokens, a.model))
-    os.makedirs(os.path.dirname(a.out), exist_ok=True)
-    json.dump(out, open(a.out, "w"), indent=2)
+    d = os.path.dirname(a.out)
+    if d:
+        os.makedirs(d, exist_ok=True)
+    with open(a.out, "w") as fh:
+        json.dump(out, fh, indent=2)
     print(json.dumps(out, indent=2))
 
 

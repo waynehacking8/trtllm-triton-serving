@@ -89,7 +89,8 @@ def main():
     res = asyncio.run(run(a.base, a.model, a.n, a.concurrency))
     res["model"] = a.model
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
-    json.dump(res, open(a.out, "w"), indent=2)
+    with open(a.out, "w") as fh:
+        json.dump(res, fh, indent=2)
     print(json.dumps(res, indent=2))
 
 
